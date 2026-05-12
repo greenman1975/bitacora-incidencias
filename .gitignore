@@ -1,0 +1,12 @@
+node_modules/
+backups/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+platform-tools/
+tools.zip
+gh
+gh_*
+.env
+public/bitacora.apk

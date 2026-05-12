@@ -1,0 +1,67 @@
+{
+  "name": "bitacora-incidencias",
+  "version": "1.0.0",
+  "description": "Bitácora de Incidencias - Sistema de gestión escolar",
+  "author": "Bitácora <soporte@bitacora.local>",
+  "homepage": "https://bitacora.local",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "electron": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --linux"
+  },
+  "build": {
+    "appId": "com.bitacora.app",
+    "productName": "Bitácora de Incidencias",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "server.js",
+      "package.json",
+      "public/**/*",
+      "backups/**/*",
+      "node_modules/**/*",
+      "icon.png"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "icon.ico",
+      "artifactName": "Bitacora-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bitácora de Incidencias",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "icon.png",
+      "category": "Education",
+      "maintainer": "Bitácora <soporte@bitacora.local>"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "express": "^5.2.1",
+    "nodemailer": "^8.0.7",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

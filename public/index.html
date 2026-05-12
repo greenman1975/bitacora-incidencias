@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bitácora</title>
+<link rel="stylesheet" href="/style.css?v=4">
+</head>
+<body>
+<div id="setupScreen" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-primary);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;">
+  <div class="app-badge" style="margin-bottom:1rem;">CONFIGURACIÓN INICIAL</div>
+  <h2 style="margin-bottom:1rem;">Ingrese el Código de su Bitácora</h2>
+  <input type="text" id="serverCode" class="form-input" placeholder="Ej: BITACORA-01" style="max-width:300px;text-align:center;font-size:1.2rem;margin-bottom:1rem;">
+  <button class="btn btn-primary" onclick="connectToServer()" style="width:100%;max-width:300px;">Conectar Sistema</button>
+  <p style="margin-top:2rem;font-size:.8rem;color:var(--text-muted);">Este código vincula su aplicación con el servidor en la nube.</p>
+</div>
+
+<div id="mainApp" style="display:none;">
+  <div class="app-bar">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <span>Bitácora</span>
+    <span class="app-badge">Escolar</span>
+  </div>
+<div class="container">
+  <div class="form-card">
+    <div style="font-size:.75rem;color:var(--text-muted);letter-spacing:.04em;display:flex;justify-content:space-between;">
+      <span>Nuevo reporte</span>
+      <span id="currentTime"></span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Alumno *</label>
+      <input class="form-input" id="alumno" required placeholder="Nombre del alumno">
+    </div>
+
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label">Grupo *</label>
+        <input class="form-input" id="grupo" required placeholder="Ej: 1°A">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ubicación</label>
+        <input class="form-input" id="ubicacion" placeholder="Salón, patio...">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Personas involucradas</label>
+      <input class="form-input" id="personas" placeholder="Nombres de los involucrados">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Descripción *</label>
+      <textarea class="form-textarea" id="descripcion" rows="3" required></textarea>
+    </div>
+
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label">Categoría</label>
+        <select class="form-select" id="categoria">
+          <option value="Conducta">Conducta</option>
+          <option value="Uniforme">Uniforme</option>
+          <option value="Tareas">Tareas</option>
+          <option value="Asistencia">Asistencia</option>
+          <option value="Academico">Académico</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nivel de alerta</label>
+        <select class="form-select" id="gravedad">
+          <option value="Baja">Baja</option>
+          <option value="Media">Media</option>
+          <option value="Alta">Alta</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label">Usuario que reporta</label>
+        <input class="form-input" id="maestro" placeholder="Tu nombre">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Firma digital</label>
+        <input class="form-input" id="firma" placeholder="Iniciales o código">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Acciones realizadas</label>
+      <textarea class="form-textarea" id="acciones" rows="2" placeholder="¿Qué se hizo al respecto?"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Seguimiento</label>
+      <textarea class="form-textarea" id="seguimiento" rows="2" placeholder="Notas de seguimiento"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Evidencia (foto)</label>
+      <input class="form-input" type="file" id="fotoInput" accept="image/*" capture="environment">
+      <img id="fotoPreview" style="width:100%;max-height:120px;object-fit:cover;border-radius:var(--radius-sm);display:none;margin-top:4px;background:rgba(0,0,0,.3);">
+    </div>
+
+    <button class="btn btn-primary" type="submit" id="btnSubmit" style="width:100%;padding:.75rem;font-size:.9rem;">Registrar incidencia</button>
+    <p class="form-status" id="status"></p>
+  </div>
+</div>
+<script>
+let fotoData = '';
+
+// Lógica de Conexión Universal
+function checkConnection() {
+  const savedUrl = localStorage.getItem('serverUrl');
+  if (!savedUrl && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    document.getElementById('setupScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+  } else {
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+  }
+}
+
+async function connectToServer() {
+  const code = document.getElementById('serverCode').value.trim().toUpperCase();
+  if (!code) return;
+  
+  // Aquí es donde el CÓDIGO se traduce a una URL de la NUBE
+  // Por ahora usaremos tu IP local como ejemplo de "Nube Privada"
+  const url = `http://192.168.11.50:3000`; 
+  
+  localStorage.setItem('serverUrl', url);
+  localStorage.setItem('serverCode', code);
+  checkConnection();
+}
+
+checkConnection();
+document.getElementById('fotoInput').onchange = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    fotoData = ev.target.result;
+    document.getElementById('fotoPreview').src = fotoData;
+    document.getElementById('fotoPreview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+};
+
+document.getElementById('currentTime').textContent = new Date().toLocaleString('es-MX', { hour12: false });
+
+document.getElementById('btnSubmit').onclick = async () => {
+  const status = document.getElementById('status');
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true; status.textContent = 'Guardando...';
+  try {
+    const r = await fetch('/api/incidencias', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alumno: document.getElementById('alumno').value,
+        grupo: document.getElementById('grupo').value,
+        descripcion: document.getElementById('descripcion').value,
+        maestro: document.getElementById('maestro').value,
+        categoria: document.getElementById('categoria').value,
+        gravedad: document.getElementById('gravedad').value,
+        ubicacion: document.getElementById('ubicacion').value,
+        personas_involucradas: document.getElementById('personas').value,
+        acciones_realizadas: document.getElementById('acciones').value,
+        seguimiento: document.getElementById('seguimiento').value,
+        firma_digital: document.getElementById('firma').value,
+        foto: fotoData
+      })
+    });
+    if (!r.ok) throw await r.json();
+    status.textContent = '✅ Incidencia registrada';
+    ['alumno','grupo','descripcion','maestro','ubicacion','personas','acciones','seguimiento','firma'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('categoria').selectedIndex = 0;
+    document.getElementById('gravedad').selectedIndex = 0;
+    fotoData = '';
+    document.getElementById('fotoPreview').style.display = 'none';
+    document.getElementById('fotoInput').value = '';
+  } catch(err) {
+    status.textContent = '❌ Error: ' + (err.error || 'desconocido');
+  }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitácora</title>
+<link rel="stylesheet" href="/style.css?v=3">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-bar">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  Bitácora
+  <span class="app-badge">Panel</span>
+  <span id="serverIP" style="font-size:.7rem;color:var(--text-muted);margin-left:.5rem;cursor:pointer;border-bottom:1px dashed var(--text-muted);" onclick="editarIP()" title="Click para cambiar IP">---</span>
+  <span class="spacer"></span>
+  <span id="fullscreenBtn" style="font-size:.85rem;color:var(--text-muted);cursor:pointer;margin-right:.5rem;" onclick="toggleFullscreen()" title="Pantalla completa (F11)">⛶</span>
+  <span id="statusDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#34C759;margin-right:4px;"></span>
+  <span id="statusText" style="font-size:.72rem;color:var(--text-secondary);">En línea</span>
+</div>
+<div class="container">
+  <div class="admin-bar">
+    <div class="admin-bar-title">
+      Incidencias
+      <span id="countBadge" class="badge badge-baja">0</span>
+    </div>
+    <div class="admin-bar-actions">
+      <button class="btn btn-outline btn-sm" onclick="toggleDashboard()">Dashboard</button>
+      <button class="btn btn-outline btn-sm" onclick="showExportMenu()">Exportar</button>
+      <button class="btn btn-outline btn-sm" onclick="mostrarQR()">QR</button>
+      <button class="btn btn-outline btn-sm" onclick="mostrarConfig()">⚙️</button>
+      <button class="btn btn-outline btn-sm" id="authBtn" onclick="showPinDialog()">Subdirector</button>
+    </div>
+  </div>
+
+  <div class="online-bar" onclick="toggleOnlineList()" title="Ver maestros en línea">
+    Profesores: <span class="online-count" id="onlineCount">0</span> en línea
+  </div>
+  <div id="onlinePanel" class="online-panel"></div>
+
+  <div id="dashboard" class="dashboard">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-pendientes" style="color:var(--warning)">0</div><div class="stat-label">Pendientes</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-resueltas" style="color:var(--success)">0</div><div class="stat-label">Resueltas</div></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box" style="flex:100%;"><canvas id="chartTimeline" height="100"></canvas></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box"><canvas id="chartGravedad" height="140"></canvas></div>
+      <div class="chart-box"><canvas id="chartCategoria" height="140"></canvas></div>
+      <div class="chart-box"><canvas id="chartGrupo" height="140"></canvas></div>
+    </div>
+    <div id="weeklyRow" class="weekly-card">
+      <div class="weekly-title">Resumen semanal</div>
+      <div class="weekly-stats">
+        <div>Esta semana: <strong id="weekThis">—</strong></div>
+        <div>Semana pasada: <strong id="weekLast">—</strong></div>
+        <div>Tendencia: <strong id="weekTrend">—</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input class="form-input" id="filtro" placeholder="Buscar alumno o grupo...">
+    <select class="form-select" id="filtroMaestro"><option value="">Todos</option></select>
+    <select class="form-select" id="filtroCategoria">
+      <option value="">Categoría</option>
+    </select>
+    <select class="form-select" id="filtroGravedad">
+      <option value="">Alerta</option>
+      <option value="Baja">Baja</option>
+      <option value="Media">Media</option>
+      <option value="Alta">Alta</option>
+    </select>
+    <select class="form-select" id="filtroEstado">
+      <option value="">Estado</option>
+      <option value="0">Pendiente</option>
+      <option value="1">Resuelta</option>
+    </select>
+    <button class="btn btn-outline btn-sm" onclick="cargar()">↻</button>
+  </div>
+
+  <div id="lista"></div>
+  <div id="emptyState" class="empty-state" style="display:none;">
+    <div class="empty-state-icon">📋</div>
+    <div class="empty-state-text">No hay incidencias registradas</div>
+  </div>
+</div>
+
+<div id="recordatorioBanner" class="recordatorio-banner"></div>
+
+<div id="qrModal" class="modal-overlay" style="display:none;">
+  <div class="modal" style="text-align:center;max-width:300px;">
+    <h3>Escanéa con tu celular</h3>
+    <div id="qrContainer" style="margin:1rem 0;min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;">Cargando...</div>
+    <p id="qrUrl" style="font-size:.72rem;color:var(--text-muted);word-break:break-all;"></p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('qrModal').style.display='none'" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="configModal" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:400px;">
+    <h3>⚙️ Configuración</h3>
+    <div style="margin:.75rem 0;">
+      <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">RESPALDO AUTOMÁTICO</div>
+      <div style="display:flex;gap:.4rem;align-items:center;margin-bottom:.5rem;">
+        <span style="font-size:.8rem;color:var(--text-muted);">Cada</span>
+        <select class="form-select" id="backupInterval" style="flex:1;min-width:0;">
+          <option value="0">Desactivado</option>
+          <option value="1">1 hora</option>
+          <option value="6">6 horas</option>
+          <option value="12">12 horas</option>
+          <option value="24">24 horas</option>
+          <option value="48">48 horas</option>
+          <option value="72">72 horas</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="guardarBackupConfig()">Guardar</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="backupAhora()" style="width:100%;margin-bottom:.3rem;">📦 Hacer respaldo ahora</button>
+      <div id="backupStatus" style="font-size:.72rem;color:var(--text-muted);"></div>
+    </div>
+    <div style="margin:.75rem 0;border-top:1px solid var(--border-light);padding-top:.75rem;">
+      <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">CATEGORÍAS</div>
+      <div style="display:flex;gap:.4rem;margin-bottom:.5rem;">
+        <input class="form-input" id="nuevaCategoria" placeholder="Nueva categoría..." style="flex:1;min-width:0;">
+        <button class="btn btn-primary btn-sm" onclick="agregarCategoria()">Agregar</button>
+      </div>
+      <div id="listaCategorias" style="font-size:.8rem;"></div>
+    </div>
+    <div style="margin:.75rem 0;border-top:1px solid var(--border-light);padding-top:.75rem;">
+      <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">REPORTES POR EMAIL (SMTP)</div>
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        <input class="form-input" id="smtp_host" placeholder="Host (ej. smtp.gmail.com)">
+        <div style="display:flex;gap:.4rem;">
+          <input class="form-input" id="smtp_port" placeholder="Puerto" style="flex:1;">
+          <select class="form-select" id="smtp_secure" style="flex:1;"><option value="false">STARTTLS (587)</option><option value="true">SSL (465)</option></select>
+        </div>
+        <input class="form-input" id="smtp_user" placeholder="Usuario/Email">
+        <input class="form-input" id="smtp_pass" type="password" placeholder="Contraseña">
+        <input class="form-input" id="report_email" placeholder="Enviar reporte diario a...">
+        <div style="display:flex;gap:.4rem;">
+          <button class="btn btn-primary btn-sm" onclick="guardarEmailConfig()" style="flex:2;">Guardar Config</button>
+          <button class="btn btn-outline btn-sm" onclick="testEmail()" style="flex:1;">Probar</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin:.75rem 0;border-top:1px solid var(--border-light);padding-top:.75rem;">
+      <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">RECORDATORIOS</div>
+      <div style="display:flex;gap:.4rem;align-items:center;">
+        <span style="font-size:.8rem;color:var(--text-muted);">Alertar si pasan</span>
+        <input class="form-input" id="reminderDays" type="number" min="1" max="30" style="width:70px;text-align:center;">
+        <span style="font-size:.8rem;color:var(--text-muted);">días sin resolver</span>
+        <button class="btn btn-outline btn-sm" onclick="guardarReminderConfig()">Guardar</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('configModal').style.display='none'" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="pinDialog" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Subdirector</h3>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem;">Ingresá el PIN para editar o eliminar.</p>
+    <input class="form-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" style="text-align:center;font-size:1.1rem;">
+    <p id="pinError" style="color:var(--danger);font-size:.8rem;display:none;margin-top:.5rem;">PIN incorrecto</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closePinDialog()">Cancelar</button>
+      <button class="btn btn-primary" onclick="authPin()">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="editDialog" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <h3>Editar incidencia</h3>
+    <div style="display:flex;flex-direction:column;gap:.5rem;">
+      <input class="form-input" id="editAlumno" placeholder="Alumno">
+      <div class="field-grid">
+        <input class="form-input" id="editGrupo" placeholder="Grupo">
+        <input class="form-input" id="editUbicacion" placeholder="Ubicación">
+      </div>
+      <textarea class="form-textarea" id="editDesc" rows="2" placeholder="Descripción"></textarea>
+      <div class="field-grid">
+        <select class="form-select" id="editGravedad"><option>Baja</option><option>Media</option><option>Alta</option></select>
+        <select class="form-select" id="editCategoria"></select>
+      </div>
+      <input class="form-input" id="editPersonas" placeholder="Personas involucradas">
+      <textarea class="form-textarea" id="editAcciones" rows="2" placeholder="Acciones realizadas"></textarea>
+      <textarea class="form-textarea" id="editSeguimiento" rows="2" placeholder="Seguimiento"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeEdit()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="exportMenu" class="modal-overlay" style="display:none;">
+  <div class="modal" style="text-align:center;">
+    <h3>Exportar</h3>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem;">Seleccioná el formato</p>
+    <div style="display:flex;flex-direction:column;gap:.5rem;">
+      <button class="btn btn-primary btn-export" data-action="csv" style="width:100%;">CSV (Excel)</button>
+      <button class="btn btn-outline btn-export" data-action="pdf" style="width:100%;">📄 PDF profesional</button>
+      <button class="btn btn-outline btn-export" data-action="html" style="width:100%;">Reporte HTML</button>
+      <button class="btn btn-outline btn-close-export" style="width:100%;margin-top:.5rem;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="csvModal" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:90%;max-height:80%;">
+    <h3>CSV Export</h3>
+    <pre id="csvContent" style="font-size:.7rem;max-height:60vh;overflow:auto;background:rgba(0,0,0,.5);padding:1rem;border-radius:6px;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-csv-close" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="comentariosModal" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <h3>Comentarios</h3>
+    <div id="comentariosList" style="max-height:250px;overflow-y:auto;margin-bottom:.75rem;font-size:.8rem;"></div>
+    <div style="display:flex;gap:.4rem;">
+      <input class="form-input" id="comentarioInput" placeholder="Agregar comentario..." style="flex:1;min-width:0;">
+      <button class="btn btn-primary btn-sm" onclick="addComentario()">Enviar</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('comentariosModal').style.display='none'" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function mostrarIP() {
+  const ip = localStorage.getItem('serverIP') || '192.168.11.50';
+  document.getElementById('serverIP').textContent = ip;
+}
+function editarIP() {
+  const ip = prompt('Dirección IP del servidor:', localStorage.getItem('serverIP') || '192.168.11.50');
+  if (ip && ip.trim()) {
+    localStorage.setItem('serverIP', ip.trim());
+    mostrarIP();
+  }
+}
+mostrarIP();
+let authed = false;
+let savedPin = '';
+let editId = null;
+let chartInstances = {};
+
+var notiAudio = new Audio('data:audio/wav;base64,UklGRtQEAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YbAEAAB/pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQll+pLu7pH9ZQkJZfqS7u6R/WUJCWX6ku7ukf1lCQlk=');
+function playNotiSound() {
+  try { notiAudio.currentTime = 0; notiAudio.play(); } catch(e) {}
+}
+
+function mostrarNotif(texto) {
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') new Notification('Bitácora', { body: texto });
+    else if (Notification.permission === 'default') Notification.requestPermission();
+  }
+}
+
+async function mostrarContextoAlumno(nueva) {
+  try {
+    const r = await fetch('/api/incidencias?alumno=' + encodeURIComponent(nueva.alumno) + '&limit=4');
+    const datos = await r.json();
+    const previas = datos.filter(d => d.id !== nueva.id).slice(0, 3);
+    if (previas.length === 0) return;
+    const container = document.getElementById('toastContainer') || (() => {
+      const c = document.createElement('div'); c.id = 'toastContainer';
+      c.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;max-width:360px;';
+      document.body.appendChild(c); return c;
+    })();
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `
+      <div style="color:var(--accent);font-size:.7rem;letter-spacing:.06em;margin-bottom:.3rem;">${nueva.alumno} · ${nueva.grupo}</div>
+      <div style="font-size:.8rem;color:var(--text-primary);margin-bottom:.2rem;">${nueva.descripcion}</div>
+      <div style="font-size:.65rem;color:var(--text-muted);margin-bottom:.4rem;">${nueva.gravedad} · ${nueva.categoria} · ${nueva.maestro}</div>
+      ${previas.length > 0 ? `<div style="font-size:.62rem;color:var(--warning);letter-spacing:.04em;margin-bottom:.2rem;">ANTECEDENTES:</div>
+      ${previas.map(p => `<div style="font-size:.7rem;color:var(--text-secondary);padding:2px 0;border-top:1px solid var(--border-light);">${p.descripcion} <span style="color:var(--text-muted);font-size:.62rem;">${p.fecha?.slice(5,16) || ''} · ${p.gravedad}</span></div>`).join('')}` : ''}`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; setTimeout(() => toast.remove(), 300); }, 8000);
+  } catch(e) {}
+}
+
+const evtSource = new EventSource('/api/events');
+evtSource.onopen = () => { setOnline(true); };
+evtSource.onerror = () => { setOnline(false); };
+if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); }
+});
+
+function setOnline(online) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (online) { dot.style.background = '#34C759'; txt.textContent = 'En línea'; }
+  else { dot.style.background = '#FF453A'; txt.textContent = 'Desconectado'; }
+}
+
+function showPinDialog() { document.getElementById('pinDialog').style.display = 'flex'; document.getElementById('pinInput').value = ''; document.getElementById('pinError').style.display = 'none'; }
+function closePinDialog() { document.getElementById('pinDialog').style.display = 'none'; }
+async function authPin() {
+  const pin = document.getElementById('pinInput').value;
+  const r = await fetch('/api/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
+  const data = await r.json();
+  if (data.ok) { authed = true; savedPin = pin; closePinDialog(); document.getElementById('authBtn').textContent = 'Subdirector'; cargar(); }
+  else { document.getElementById('pinError').style.display = 'block'; }
+}
+
+function editIncidencia(id) {
+  if (!authed) { showPinDialog(); return; }
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (!card) return;
+  editId = id;
+  document.getElementById('editAlumno').value = card.dataset.alumno;
+  document.getElementById('editGrupo').value = card.dataset.grupo;
+  document.getElementById('editDesc').value = card.dataset.desc;
+  document.getElementById('editGravedad').value = card.dataset.gravedad;
+  document.getElementById('editCategoria').value = card.dataset.categoria;
+  document.getElementById('editUbicacion').value = card.dataset.ubicacion || '';
+  document.getElementById('editPersonas').value = card.dataset.personas || '';
+  document.getElementById('editAcciones').value = card.dataset.acciones || '';
+  document.getElementById('editSeguimiento').value = card.dataset.seguimiento || '';
+  document.getElementById('editDialog').style.display = 'flex';
+}
+function closeEdit() { document.getElementById('editDialog').style.display = 'none'; editId = null; }
+async function saveEdit() {
+  if (!authed || !editId) return;
+  await fetch('/api/incidencias/' + editId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Pin': savedPin },
+    body: JSON.stringify({
+      alumno: document.getElementById('editAlumno').value,
+      grupo: document.getElementById('editGrupo').value,
+      descripcion: document.getElementById('editDesc').value,
+      gravedad: document.getElementById('editGravedad').value,
+      categoria: document.getElementById('editCategoria').value,
+      resuelta: false,
+      ubicacion: document.getElementById('editUbicacion').value,
+      personas_involucradas: document.getElementById('editPersonas').value,
+      acciones_realizadas: document.getElementById('editAcciones').value,
+      seguimiento: document.getElementById('editSeguimiento').value
+    })
+  });
+  closeEdit(); cargar();
+}
+function deleteIncidencia(id) {
+  if (!authed) return;
+  fetch('/api/incidencias/' + id, { method: 'DELETE', headers: { 'X-Auth-Pin': savedPin } })
+    .then(r => { if (r.ok) cargar(); })
+    .catch(e => console.error('Error:', e));
+}
+
+function showExportMenu() { document.getElementById('exportMenu').style.display = 'flex'; }
+document.getElementById('exportMenu').addEventListener('click', function(e) {
+  const action = e.target.dataset.action;
+  if (action === 'csv') {
+    fetch('/api/export/csv').then(r => r.text()).then(txt => {
+      document.getElementById('csvContent').textContent = txt;
+      document.getElementById('csvModal').style.display = 'flex';
+    });
+    this.style.display = 'none';
+  }
+  else if (action === 'html') { window.location.href = '/api/export/html'; }
+  else if (action === 'pdf') { window.location.href = '/api/export/html'; }
+  else if (e.target.classList.contains('btn-close-export') || e.target === this)
+    this.style.display = 'none';
+});
+document.getElementById('csvModal').addEventListener('click', function(e) {
+  if (e.target.classList.contains('btn-csv-close') || e.target === this)
+    this.style.display = 'none';
+});
+
+let onlineLista = [];
+async function actualizarOnline() {
+  try {
+    const r = await fetch('/api/online');
+    onlineLista = await r.json();
+    document.getElementById('onlineCount').textContent = onlineLista.length;
+    const panel = document.getElementById('onlinePanel');
+    if (panel.style.display !== 'none') mostrarOnlineLista();
+  } catch(e) {}
+}
+function toggleOnlineList() {
+  const panel = document.getElementById('onlinePanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display !== 'none') mostrarOnlineLista();
+}
+function mostrarOnlineLista() {
+  const panel = document.getElementById('onlinePanel');
+  if (onlineLista.length === 0) {
+    panel.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:.5rem;">Nadie en línea</div>';
+  } else {
+    panel.innerHTML = onlineLista.map(m => `
+      <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid var(--border-light);font-size:.82rem;color:var(--text-secondary);">
+        <span style="width:7px;height:7px;border-radius:50%;background:#34C759;display:inline-block;"></span>
+        ${m}
+      </div>`).join('');
+  }
+}
+setInterval(actualizarOnline, 5000);
+
+async function cargarMaestros() {
+  const r = await fetch('/api/incidencias');
+  const datos = await r.json();
+  const maestros = [...new Set(datos.map(d => d.maestro).filter(Boolean))];
+  const sel = document.getElementById('filtroMaestro');
+  sel.innerHTML = '<option value="">Todos</option>' + maestros.map(m => `<option>${m}</option>`).join('');
+}
+
+async function cargarCategoriasSelects() {
+  const r = await fetch('/api/categorias');
+  const cats = await r.json();
+  const opts = cats.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+  document.getElementById('filtroCategoria').innerHTML = '<option value="">Categoría</option>' + opts;
+  document.getElementById('editCategoria').innerHTML = opts;
+}
+
+async function cargar() {
+  const r = await fetch('/api/incidencias');
+  const datos = await r.json();
+  const filtro = document.getElementById('filtro').value.toLowerCase();
+  const m = document.getElementById('filtroMaestro').value;
+  const cat = document.getElementById('filtroCategoria').value;
+  const g = document.getElementById('filtroGravedad').value;
+  const est = document.getElementById('filtroEstado').value;
+  const filtrados = datos.filter(d =>
+    (d.alumno.toLowerCase().includes(filtro) || d.grupo.toLowerCase().includes(filtro)) &&
+    (!m || d.maestro === m) && (!cat || d.categoria === cat) &&
+    (!g || d.gravedad === g) && (est === '' || d.resuelta == est)
+  );
+  document.getElementById('countBadge').textContent = filtrados.length;
+  const empty = document.getElementById('emptyState');
+  const list = document.getElementById('lista');
+  if (filtrados.length === 0) { empty.style.display = 'block'; list.innerHTML = ''; return; }
+  empty.style.display = 'none';
+  list.innerHTML = filtrados.map(d => `
+    <div class="card ${d.resuelta ? 'resuelta' : ''}" 
+      data-id="${d.id}" 
+      data-alumno="${(d.alumno||'').replace(/"/g,'&quot;')}" 
+      data-grupo="${(d.grupo||'').replace(/"/g,'&quot;')}" 
+      data-desc="${(d.descripcion||'').replace(/"/g,'&quot;')}" 
+      data-gravedad="${d.gravedad}" 
+      data-categoria="${d.categoria}"
+      data-ubicacion="${(d.ubicacion||'').replace(/"/g,'&quot;')}"
+      data-personas="${(d.personas_involucradas||'').replace(/"/g,'&quot;')}"
+      data-acciones="${(d.acciones_realizadas||'').replace(/"/g,'&quot;')}"
+      data-seguimiento="${(d.seguimiento||'').replace(/"/g,'&quot;')}">
+      <div class="card-head">
+        <span class="card-head-name">${d.alumno}</span>
+        <span class="card-head-meta">${d.grupo}</span>
+        <span class="badge badge-${d.gravedad.toLowerCase()}">${d.gravedad}</span>
+      </div>
+      <div class="detail-row">
+        <span>👤 ${d.maestro || '—'}</span>
+        <span>📂 ${d.categoria}</span>
+        ${d.ubicacion ? `<span>📍 ${d.ubicacion}</span>` : ''}
+        <span class="status-dot ${d.resuelta ? 'status-closed' : 'status-open'}"></span>
+        <span>${d.resuelta ? 'Resuelta' : 'Pendiente'}</span>
+      </div>
+      <div class="card-body">${d.descripcion}</div>
+      ${d.personas_involucradas ? `<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.2rem;">👥 ${d.personas_involucradas}</div>` : ''}
+      ${d.acciones_realizadas ? `<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.2rem;">→ ${d.acciones_realizadas}</div>` : ''}
+      ${d.foto ? `<img class="card-photo" src="${d.foto}" loading="lazy">` : ''}
+      <div class="card-foot">
+        <span>#${d.id} · ${d.fecha?.slice(5,16) || d.fecha}</span>
+        <div style="display:flex;gap:.3rem;align-items:center;">
+          ${authed ? `<button class="btn-edit btn btn-outline btn-sm btn-icon" data-id="${d.id}" title="Editar">✏️</button>
+          <button class="btn-delete btn btn-outline btn-sm btn-icon btn-danger" data-id="${d.id}" title="Eliminar">🗑️</button>` : ''}
+          <button class="btn btn-outline btn-sm btn-icon" onclick="verComentarios(${d.id})" title="Comentarios">💬</button>
+          <label class="resolved-chk">
+            <input type="checkbox" ${d.resuelta ? 'checked' : ''} onchange="toggle(${d.id}, this.checked)">
+            Resuelta
+          </label>
+  </div>
+</div>`).join('');
+}
+async function toggle(id, val) {
+  await fetch('/api/incidencias/' + id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({resuelta: val}) });
+  cargar();
+}
+
+let comentarioId = null;
+async function verComentarios(id) {
+  comentarioId = id;
+  document.getElementById('comentariosModal').style.display = 'flex';
+  document.getElementById('comentarioInput').value = '';
+  const r = await fetch('/api/incidencias/' + id + '/comentarios');
+  const lista = await r.json();
+  const el = document.getElementById('comentariosList');
+  if (lista.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;">Sin comentarios</div>';
+  } else {
+    el.innerHTML = lista.map(c => `
+      <div style="padding:.4rem 0;border-bottom:1px solid var(--border-light);">
+        <div style="color:var(--text-primary);">${c.texto}</div>
+        <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">${c.autor} · ${c.fecha?.slice(5,16) || ''}</div>
+      </div>`).join('');
+  }
+}
+async function addComentario() {
+  const texto = document.getElementById('comentarioInput').value.trim();
+  if (!texto) return;
+  try {
+    const r = await fetch('/api/incidencias/' + comentarioId + '/comentarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Pin': savedPin },
+      body: JSON.stringify({ texto })
+    });
+    if (!r.ok) { alert('Error al guardar: ' + r.status); return; }
+    document.getElementById('comentarioInput').value = '';
+    verComentarios(comentarioId);
+  } catch(e) { alert('Error de red: ' + e.message); }
+}
+
+let dashboardVisible = false;
+function toggleDashboard() {
+  dashboardVisible = !dashboardVisible;
+  document.getElementById('dashboard').style.display = dashboardVisible ? 'block' : 'none';
+  if (dashboardVisible) actualizarDashboard();
+}
+async function actualizarDashboard() {
+  const r = await fetch('/api/stats');
+  const s = await r.json();
+  document.getElementById('stat-total').textContent = s.total;
+  document.getElementById('stat-pendientes').textContent = s.pendientes;
+  document.getElementById('stat-resueltas').textContent = s.resueltas;
+  makeChart('chartGravedad', s.porGravedad.map(x=>x.gravedad), s.porGravedad.map(x=>x.c), ['#34C759','#FF9F0A','#FF453A']);
+  makeChart('chartCategoria', s.porCategoria.map(x=>x.categoria), s.porCategoria.map(x=>x.c));
+  makeChart('chartGrupo', s.porGrupo.map(x=>x.grupo), s.porGrupo.map(x=>x.c));
+  try {
+    const t = await (await fetch('/api/stats/timeline')).json();
+    makeLineChart('chartTimeline', t.map(x=>x.dia), t.map(x=>x.count));
+  } catch(e) {}
+  try {
+    const w = await (await fetch('/api/stats/weekly')).json();
+    document.getElementById('weeklyRow').style.display = 'flex';
+    document.getElementById('weeklyRow').style.flexDirection = 'column';
+    document.getElementById('weekThis').textContent = w.thisWeek;
+    document.getElementById('weekLast').textContent = w.lastWeek;
+    const trendEl = document.getElementById('weekTrend');
+    if (w.trend === 'up') { trendEl.textContent = '↑ Subiendo'; trendEl.style.color = '#FF453A'; }
+    else if (w.trend === 'down') { trendEl.textContent = '↓ Bajando'; trendEl.style.color = '#34C759'; }
+    else { trendEl.textContent = '→ Estable'; trendEl.style.color = '#FF9F0A'; }
+  } catch(e) { document.getElementById('weeklyRow').style.display = 'none'; }
+}
+function makeLineChart(id, labels, data) {
+  if (chartInstances[id]) chartInstances[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 100);
+  gradient.addColorStop(0, 'rgba(0, 122, 255, 0.2)');
+  gradient.addColorStop(1, 'rgba(0, 122, 255, 0)');
+  chartInstances[id] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ data, fill: true, backgroundColor: gradient, borderColor: '#007AFF', borderWidth: 2, pointBackgroundColor: '#007AFF', pointRadius: 2, pointHoverRadius: 4, tension: .3 }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#55557A', font: { size: 9 }, maxTicksLimit: 8 } }, y: { beginAtZero: true, ticks: { color: '#55557A', stepSize: 1 } } } }
+  });
+}
+function makeChart(id, labels, data, colors) {
+  if (chartInstances[id]) chartInstances[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const canvasCtx = ctx.getContext('2d');
+  const gradients = (colors || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6']).map(color => {
+    const g = canvasCtx.createLinearGradient(0, 0, 0, 150);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color + '44');
+    return g;
+  });
+  chartInstances[id] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: gradients, borderColor: colors || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'], borderWidth: 1, borderRadius: 6 }] },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: true, 
+      plugins: { 
+        legend: { display: false },
+        tooltip: { backgroundColor: '#181825', titleColor: '#f1f1f5', bodyColor: '#a0a0b8', borderColor: '#2a2a3e', borderWidth: 1, padding: 10, cornerRadius: 8 }
+      }, 
+      scales: { 
+        y: { beginAtZero: true, grid: { color: '#1e1e30' }, ticks: { color: '#6b6b85', stepSize: 1 } },
+        x: { grid: { display: false }, ticks: { color: '#6b6b85', font: { size: 9 } } }
+      } 
+    }
+  });
+}
+
+async function guardarEmailConfig() {
+  if (!authed) { showPinDialog(); return; }
+  const body = {
+    smtp_host: document.getElementById('smtp_host').value,
+    smtp_port: document.getElementById('smtp_port').value,
+    smtp_user: document.getElementById('smtp_user').value,
+    smtp_pass: document.getElementById('smtp_pass').value,
+    smtp_secure: document.getElementById('smtp_secure').value,
+    report_email: document.getElementById('report_email').value
+  };
+  try {
+    const r = await fetch('/api/config/email', { method:'PUT', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify(body) });
+    if (r.ok) alert('✅ Configuración de email guardada');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function testEmail() {
+  if (!authed) { showPinDialog(); return; }
+  const btn = event.target;
+  btn.textContent = 'Enviando...';
+  const body = {
+    smtp_host: document.getElementById('smtp_host').value,
+    smtp_port: document.getElementById('smtp_port').value,
+    smtp_user: document.getElementById('smtp_user').value,
+    smtp_pass: document.getElementById('smtp_pass').value,
+    smtp_secure: document.getElementById('smtp_secure').value,
+    report_email: document.getElementById('report_email').value
+  };
+  try {
+    const r = await fetch('/api/config/email/test', { method:'POST', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) alert('✅ ¡Email de prueba enviado con éxito!');
+    else alert('❌ Error: ' + d.error);
+  } catch(e) { alert('Error: ' + e.message); }
+  btn.textContent = 'Probar';
+}
+
+document.getElementById('filtro').addEventListener('input', cargar);
+document.getElementById('filtroMaestro').addEventListener('change', cargar);
+document.getElementById('filtroCategoria').addEventListener('change', cargar);
+document.getElementById('filtroGravedad').addEventListener('change', cargar);
+document.getElementById('filtroEstado').addEventListener('change', cargar);
+
+document.getElementById('lista').addEventListener('click', function(e) {
+  const del = e.target.closest('.btn-delete');
+  if (del) {
+    const id = parseInt(del.dataset.id);
+    if (confirm('¿Eliminar esta incidencia?')) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('DELETE', '/api/incidencias/' + id, true);
+      xhr.setRequestHeader('X-Auth-Pin', savedPin);
+      xhr.onload = function() { if (xhr.status >= 200 && xhr.status < 300) cargar(); };
+      xhr.send();
+    }
+    return;
+  }
+  const edit = e.target.closest('.btn-edit');
+  if (edit) {
+    const id = parseInt(edit.dataset.id);
+    const card = edit.closest('.card');
+    if (card) {
+      editId = id;
+      document.getElementById('editAlumno').value = card.dataset.alumno;
+      document.getElementById('editGrupo').value = card.dataset.grupo;
+      document.getElementById('editDesc').value = card.dataset.desc;
+      document.getElementById('editGravedad').value = card.dataset.gravedad;
+      document.getElementById('editCategoria').value = card.dataset.categoria;
+      document.getElementById('editUbicacion').value = card.dataset.ubicacion || '';
+      document.getElementById('editPersonas').value = card.dataset.personas || '';
+      document.getElementById('editAcciones').value = card.dataset.acciones || '';
+      document.getElementById('editSeguimiento').value = card.dataset.seguimiento || '';
+      document.getElementById('editDialog').style.display = 'flex';
+    }
+  }
+});
+
+cargarMaestros();
+cargarCategoriasSelects();
+cargar();
+
+// QR
+async function mostrarQR() {
+  document.getElementById('qrModal').style.display = 'flex';
+  document.getElementById('qrContainer').innerHTML = 'Cargando...';
+  document.getElementById('qrUrl').textContent = '';
+  try {
+    const r = await fetch('/api/qr');
+    const d = await r.json();
+    document.getElementById('qrContainer').innerHTML = `<img src="${d.qr}" style="width:220px;height:220px;border-radius:8px;">`;
+    document.getElementById('qrUrl').textContent = d.url;
+  } catch(e) {
+    document.getElementById('qrContainer').innerHTML = '<span style="color:var(--danger);">Error al generar QR</span>';
+  }
+}
+
+// Backup
+async function guardarBackupConfig() {
+  if (!authed) { showPinDialog(); return; }
+  const interval = parseInt(document.getElementById('backupInterval').value);
+  try {
+    const r = await fetch('/api/backup/config', { method:'PUT', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify({interval}) });
+    if (!r.ok) { alert('Error: ' + r.status); return; }
+    document.getElementById('backupStatus').textContent = '✅ Configuración guardada';
+    setTimeout(() => document.getElementById('backupStatus').textContent = '', 3000);
+  } catch(e) { alert('Error de red: ' + e.message); }
+}
+async function backupAhora() {
+  const status = document.getElementById('backupStatus');
+  status.textContent = '⏳ Respaldando...';
+  try {
+    const r = await fetch('/api/backup/now', { method:'POST' });
+    const d = await r.json();
+    status.textContent = '✅ Respaldo creado: ' + d.name;
+  } catch(e) {
+    status.textContent = '❌ Error al respaldar';
+  }
+}
+
+// Categorías
+async function cargarCategorias() {
+  const r = await fetch('/api/categorias');
+  const cats = await r.json();
+  const el = document.getElementById('listaCategorias');
+  if (cats.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:.3rem;">Sin categorías</div>';
+    return;
+  }
+  el.innerHTML = cats.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border-light);font-size:.8rem;">
+      <span style="color:var(--text-primary);">${c.nombre}</span>
+      <button class="btn btn-outline btn-sm btn-danger" onclick="eliminarCategoria(${c.id},'${c.nombre}')" style="font-size:.65rem;padding:2px 8px;">✕</button>
+    </div>`).join('');
+}
+async function agregarCategoria() {
+  const input = document.getElementById('nuevaCategoria');
+  const nombre = input.value.trim();
+  if (!nombre) return;
+  try {
+    await fetch('/api/categorias', { method:'POST', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify({nombre}) });
+    input.value = '';
+    cargarCategorias();
+    cargarCategoriasSelects();
+  } catch(e) {
+    alert('Error al agregar categoría');
+  }
+}
+async function eliminarCategoria(id, nombre) {
+  try {
+    await fetch('/api/categorias/' + id, { method:'DELETE', headers:{'X-Auth-Pin':savedPin} });
+    cargarCategorias();
+    cargarCategoriasSelects();
+  } catch(e) { alert('Error al eliminar'); }
+}
+
+// Config modal
+async function mostrarConfig() {
+  document.getElementById('configModal').style.display = 'flex';
+  document.getElementById('backupStatus').textContent = '';
+  // Cargar config backup
+  try {
+    const r = await fetch('/api/backup/config');
+    const d = await r.json();
+    document.getElementById('backupInterval').value = String(d.interval || 0);
+  } catch(e) {}
+  // Cargar categorías
+  cargarCategorias();
+  try {
+    const r = await fetch('/api/reminder/config');
+    const d = await r.json();
+    document.getElementById('reminderDays').value = d.days;
+  } catch(e) { document.getElementById('reminderDays').value = 2; }
+  // Cargar email config
+  try {
+    const r = await fetch('/api/config/email');
+    const d = await r.json();
+    document.getElementById('smtp_host').value = d.smtp_host || '';
+    document.getElementById('smtp_port').value = d.smtp_port || '587';
+    document.getElementById('smtp_user').value = d.smtp_user || '';
+    document.getElementById('smtp_secure').value = d.smtp_secure || 'false';
+    document.getElementById('report_email').value = d.report_email || '';
+  } catch(e) {}
+}
+async function guardarReminderConfig() {
+  if (!authed) { showPinDialog(); return; }
+  const days = parseInt(document.getElementById('reminderDays').value) || 2;
+  try {
+    const r = await fetch('/api/reminder/config', { method:'PUT', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify({days}) });
+    if (!r.ok) { alert('Error: ' + r.status); return; }
+    alert('✅ Configuración guardada');
+  } catch(e) { alert('Error de red: ' + e.message); }
+}
+
+// Recordatorios - handled via SSE
+evtSource.onmessage = (e) => {
+  const d = JSON.parse(e.data);
+  if (d.type === 'nueva') {
+    playNotiSound();
+    mostrarNotif(d.data.alumno + ': ' + d.data.descripcion);
+    mostrarContextoAlumno(d.data);
+    cargar(); actualizarDashboard();
+  }
+  if (d.type === 'resuelta' || d.type === 'editada' || d.type === 'eliminada' || d.type === 'comentario') { cargar(); actualizarDashboard(); }
+  if (d.type === 'categoria_eliminada') { cargarCategoriasSelects(); }
+  if (d.type === 'recordatorios' && d.data && d.data.length > 0) {
+    const banner = document.getElementById('recordatorioBanner');
+    banner.innerHTML = '⏰ <strong>' + d.data.length + ' incidencias</strong> sin resolver desde hace días <span style="float:right;font-size:.7rem;color:var(--text-muted);">Click para cerrar</span>';
+    banner.style.display = 'block';
+    mostrarNotif(d.data.length + ' incidencias pendientes hace días');
+  }
+};
+</script>
+</body>
+</html>
