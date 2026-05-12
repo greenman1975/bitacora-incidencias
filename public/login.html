@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitácora - Acceso</title>
+<link rel="stylesheet" href="/style.css?v=3">
+<style>
+  .login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .login-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: var(--shadow-lg);
+  }
+  .login-icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--accent), #1d4ed8);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.2rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .login-title {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: .3rem;
+  }
+  .login-sub {
+    text-align: center;
+    font-size: .78rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+  .login-error {
+    color: var(--danger);
+    font-size: .8rem;
+    text-align: center;
+    display: none;
+    margin-bottom: 1rem;
+    padding: .5rem;
+    background: rgba(239,68,68,.1);
+    border-radius: var(--radius-sm);
+  }
+  .login-input {
+    width: 100%;
+    text-align: center;
+    font-size: 1.2rem;
+    letter-spacing: .3em;
+  }
+  .login-btn {
+    width: 100%;
+    margin-top: 1rem;
+    padding: .75rem;
+  }
+  .login-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: .7rem;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-icon">B</div>
+    <div class="login-title">Bitácora</div>
+    <div class="login-sub">Ingresá el PIN de Subdirector</div>
+    <div class="login-error" id="loginError">PIN incorrecto</div>
+    <input class="form-input login-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="• • • •" autofocus>
+    <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="login-footer">Sistema de Gestión Escolar</div>
+  </div>
+</div>
+<script>
+async function doLogin() {
+  const pin = document.getElementById('pinInput').value;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginError');
+  if (!pin) return;
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      localStorage.setItem('sessionToken', d.token);
+      window.location.href = '/';
+    } else {
+      err.textContent = 'PIN incorrecto';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Error de conexión';
+    err.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Entrar';
+}
+document.getElementById('pinInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('pinInput').focus();
+</script>
+</body>
+</html>

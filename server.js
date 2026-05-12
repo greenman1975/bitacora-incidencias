@@ -96,6 +96,49 @@ try { db.exec("ALTER TABLE incidencias ADD COLUMN firma_digital TEXT DEFAULT ''"
 const getPin = () => db.prepare("SELECT value FROM config WHERE key='pin'").pluck().get() || '1234';
 const setPin = (pin) => db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES (?,?)").run('pin', pin);
 
+// Session-based auth
+const sessions = {};
+const SESSION_EXPIRY = 24 * 60 * 60 * 1000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const t in sessions) {
+    if (now - sessions[t] > SESSION_EXPIRY) delete sessions[t];
+  }
+}, 3600000);
+
+app.post('/api/login', (req, res) => {
+  const { pin } = req.body;
+  if (pin !== getPin()) return res.status(401).json({ error: 'PIN incorrecto' });
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions[token] = Date.now();
+  res.json({ ok: true, token });
+});
+
+app.post('/api/logout', (req, res) => {
+  const auth = req.headers['authorization'];
+  if (auth) delete sessions[auth.replace('Bearer ', '')];
+  res.json({ ok: true });
+});
+
+app.get('/api/verify', (req, res) => {
+  const auth = req.headers['authorization'];
+  const token = auth ? auth.replace('Bearer ', '') : '';
+  res.json({ ok: !!token && !!sessions[token] });
+});
+
+function requireSession(req, res, next) {
+  const auth = req.headers['authorization'];
+  const token = auth ? auth.replace('Bearer ', '') : '';
+  if (!token || !sessions[token]) return res.status(401).json({ error: 'Acceso denegado' });
+  sessions[token] = Date.now();
+  next();
+}
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 const clients = [];
 function broadcast(data) {
   clients.forEach(c => { try { c.write(`data: ${JSON.stringify(data)}\n\n`); } catch(e) {} });
@@ -227,7 +270,7 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/online', (req, res) => {
+app.get('/api/online', requireSession, (req, res) => {
   const ahora = Date.now();
   const enLinea = Object.entries(onlineMaestros)
     .filter(([_, t]) => ahora - t < 20000)
@@ -246,7 +289,7 @@ app.post('/api/auth', (req, res) => {
   res.json({ ok: pin === getPin() });
 });
 
-app.post('/api/pin', requireAuth, (req, res) => {
+app.post('/api/pin', requireSession, requireAuth, (req, res) => {
   const { oldPin, newPin } = req.body;
   if (oldPin !== getPin()) return res.status(400).json({ error: 'PIN actual incorrecto' });
   if (!newPin || newPin.length < 4) return res.status(400).json({ error: 'Mínimo 4 dígitos' });
@@ -266,7 +309,7 @@ app.post('/api/incidencias', (req, res) => {
   res.json(row);
 });
 
-app.get('/api/incidencias', (req, res) => {
+app.get('/api/incidencias', requireSession, (req, res) => {
   let sql = 'SELECT * FROM incidencias WHERE 1=1';
   const params = [];
   if (req.query.maestro) { sql += ' AND maestro LIKE ?'; params.push(`%${req.query.maestro}%`); }
@@ -281,7 +324,7 @@ app.get('/api/incidencias', (req, res) => {
   res.json(rows);
 });
 
-app.put('/api/incidencias/:id', requireAuth, (req, res) => {
+app.put('/api/incidencias/:id', requireSession, requireAuth, (req, res) => {
   const { alumno, grupo, descripcion, gravedad, categoria, resuelta, ubicacion, personas_involucradas, acciones_realizadas, seguimiento, firma_digital } = req.body;
   db.prepare('UPDATE incidencias SET alumno=?, grupo=?, descripcion=?, gravedad=?, categoria=?, resuelta=?, ubicacion=?, personas_involucradas=?, acciones_realizadas=?, seguimiento=?, firma_digital=? WHERE id=?')
     .run(alumno, grupo, descripcion, gravedad, categoria, resuelta ? 1 : 0, ubicacion || '', personas_involucradas || '', acciones_realizadas || '', seguimiento || '', firma_digital || '', req.params.id);
@@ -290,21 +333,21 @@ app.put('/api/incidencias/:id', requireAuth, (req, res) => {
   res.json(row);
 });
 
-app.patch('/api/incidencias/:id', (req, res) => {
+app.patch('/api/incidencias/:id', requireSession, (req, res) => {
   const { resuelta } = req.body;
   db.prepare('UPDATE incidencias SET resuelta = ? WHERE id = ?').run(resuelta ? 1 : 0, req.params.id);
   broadcast({ type: 'resuelta', id: parseInt(req.params.id), resuelta: !!resuelta });
   res.json({ ok: true });
 });
 
-app.delete('/api/incidencias/:id', requireAuth, (req, res) => {
+app.delete('/api/incidencias/:id', requireSession, requireAuth, (req, res) => {
   db.prepare('DELETE FROM comentarios WHERE incidencia_id = ?').run(req.params.id);
   db.prepare('DELETE FROM incidencias WHERE id = ?').run(req.params.id);
   broadcast({ type: 'eliminada', id: parseInt(req.params.id) });
   res.json({ ok: true });
 });
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', requireSession, (req, res) => {
   const total = db.prepare('SELECT COUNT(*) as c FROM incidencias').get().c;
   const pendientes = db.prepare('SELECT COUNT(*) as c FROM incidencias WHERE resuelta=0').get().c;
   const resueltas = db.prepare('SELECT COUNT(*) as c FROM incidencias WHERE resuelta=1').get().c;
@@ -316,7 +359,7 @@ app.get('/api/stats', (req, res) => {
   res.json({ total, pendientes, resueltas, porGravedad, porCategoria, porGrupo, porMaestro, ultimas });
 });
 
-app.get('/api/stats/weekly', (req, res) => {
+app.get('/api/stats/weekly', requireSession, (req, res) => {
   const monday = (d) => {
     const date = new Date(d);
     const day = date.getDay();
@@ -339,19 +382,19 @@ app.get('/api/stats/weekly', (req, res) => {
   res.json({ thisWeek, lastWeek, trend, byDay });
 });
 
-app.get('/api/backup/config', (req, res) => {
+app.get('/api/backup/config', requireSession, (req, res) => {
   const interval = parseInt(db.prepare("SELECT value FROM config WHERE key='backup_interval'").pluck().get()) || 0;
   const last = db.prepare("SELECT value FROM config WHERE key='backup_last'").pluck().get();
   res.json({ interval, last: last ? parseInt(last) : 0 });
 });
 
-app.put('/api/backup/config', requireAuth, (req, res) => {
+app.put('/api/backup/config', requireSession, requireAuth, (req, res) => {
   const { interval } = req.body;
   db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES (?,?)").run('backup_interval', String(interval || 0));
   res.json({ ok: true });
 });
 
-app.post('/api/backup/now', (req, res) => {
+app.post('/api/backup/now', requireSession, (req, res) => {
   try {
     const name = `incidencias-backup-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.db`;
     fs.copyFileSync(path.join(__dirname, 'incidencias.db'), path.join(BACKUP_DIR, name));
@@ -363,19 +406,19 @@ app.post('/api/backup/now', (req, res) => {
   }
 });
 
-app.get('/api/backup/list', (req, res) => {
+app.get('/api/backup/list', requireSession, (req, res) => {
   try {
     const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.db')).sort().reverse();
     res.json(files);
   } catch(e) { res.json([]); }
 });
 
-app.get('/api/backup', (req, res) => {
+app.get('/api/backup', requireSession, (req, res) => {
   const dbPath = path.join(__dirname, 'incidencias.db');
   res.download(dbPath, `bitacora-backup-${new Date().toISOString().slice(0,10)}.db`);
 });
 
-app.get('/api/export/csv', (req, res) => {
+app.get('/api/export/csv', requireSession, (req, res) => {
   const rows = db.prepare('SELECT * FROM incidencias ORDER BY fecha DESC').all();
   const header = 'id,alumno,grupo,descripcion,gravedad,categoria,maestro,ubicacion,personas,acciones,seguimiento,firma,fecha,resuelta\n';
   const csv = header + rows.map(r =>
@@ -386,7 +429,7 @@ app.get('/api/export/csv', (req, res) => {
   res.send(csv);
 });
 
-app.get('/api/export/html', (req, res) => {
+app.get('/api/export/html', requireSession, (req, res) => {
   const rows = db.prepare('SELECT * FROM incidencias ORDER BY fecha DESC').all();
   const total = rows.length;
   const pendientes = rows.filter(r => !r.resuelta).length;
@@ -519,7 +562,7 @@ app.get('/api/categorias', (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/categorias', requireAuth, (req, res) => {
+app.post('/api/categorias', requireSession, requireAuth, (req, res) => {
   const { nombre } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
   try {
@@ -530,7 +573,7 @@ app.post('/api/categorias', requireAuth, (req, res) => {
   }
 });
 
-app.delete('/api/categorias/:id', requireAuth, (req, res) => {
+app.delete('/api/categorias/:id', requireSession, requireAuth, (req, res) => {
   const cat = db.prepare('SELECT nombre FROM categorias WHERE id=?').get(req.params.id);
   if (!cat) return res.status(404).json({ error: 'No existe' });
   db.prepare('DELETE FROM categorias WHERE id=?').run(req.params.id);
@@ -538,18 +581,18 @@ app.delete('/api/categorias/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/reminder/config', (req, res) => {
+app.get('/api/reminder/config', requireSession, (req, res) => {
   const days = parseInt(db.prepare("SELECT value FROM config WHERE key='reminder_days'").pluck().get()) || 2;
   res.json({ days });
 });
 
-app.put('/api/reminder/config', requireAuth, (req, res) => {
+app.put('/api/reminder/config', requireSession, requireAuth, (req, res) => {
   const { days } = req.body;
   db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES (?,?)").run('reminder_days', String(days || 2));
   res.json({ ok: true });
 });
 
-app.get('/api/stats/timeline', (req, res) => {
+app.get('/api/stats/timeline', requireSession, (req, res) => {
   const days = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
@@ -569,7 +612,7 @@ app.get('/api/incidencias/:id/comentarios', (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/incidencias/:id/comentarios', requireAuth, (req, res) => {
+app.post('/api/incidencias/:id/comentarios', requireSession, requireAuth, (req, res) => {
   const { texto } = req.body;
   if (!texto || !texto.trim()) return res.status(400).json({ error: 'Texto requerido' });
   const stmt = db.prepare('INSERT INTO comentarios (incidencia_id, autor, texto) VALUES (?,?,?)');
@@ -593,14 +636,14 @@ app.get('/api/comentarios/maestro/:maestro', (req, res) => {
   res.json(rows);
 });
 
-app.get('/api/config/email', (req, res) => {
+app.get('/api/config/email', requireSession, (req, res) => {
   const rows = db.prepare("SELECT * FROM config WHERE key LIKE 'smtp_%' OR key = 'report_email'").all();
   const config = {};
   rows.forEach(r => { config[r.key] = r.value; });
   res.json(config);
 });
 
-app.put('/api/config/email', requireAuth, (req, res) => {
+app.put('/api/config/email', requireSession, requireAuth, (req, res) => {
   const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, report_email } = req.body;
   const stmt = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
   db.transaction(() => {
@@ -614,7 +657,7 @@ app.put('/api/config/email', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/config/email/test', requireAuth, async (req, res) => {
+app.post('/api/config/email/test', requireSession, requireAuth, async (req, res) => {
   const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, report_email } = req.body;
   try {
     const transporter = nodemailer.createTransport({

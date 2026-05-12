@@ -10,3 +10,4 @@ gh
 gh_*
 .env
 public/bitacora.apk
+dist/

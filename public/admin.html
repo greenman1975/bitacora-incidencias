@@ -30,6 +30,7 @@
       <button class="btn btn-outline btn-sm" onclick="mostrarQR()">QR</button>
       <button class="btn btn-outline btn-sm" onclick="mostrarConfig()">⚙️</button>
       <button class="btn btn-outline btn-sm" id="authBtn" onclick="showPinDialog()">Subdirector</button>
+      <button class="btn btn-outline btn-sm" onclick="logout()" style="color:var(--danger);border-color:var(--danger);">Salir</button>
     </div>
   </div>
 
@@ -239,6 +240,38 @@
 </div>
 
 <script>
+// Session check
+(function() {
+  const token = localStorage.getItem('sessionToken');
+  if (!token) {
+    window.location.href = '/login';
+    return;
+  }
+  const origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    if (!opts) opts = {};
+    if (typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login') && !url.startsWith('/api/verify')) {
+      opts.headers = opts.headers || {};
+      if (!opts.headers['Authorization']) {
+        opts.headers['Authorization'] = 'Bearer ' + token;
+      }
+    }
+    return origFetch.call(this, url, opts);
+  };
+})();
+
+function logout() {
+  const token = localStorage.getItem('sessionToken');
+  if (token) {
+    fetch('/api/logout', { method: 'POST' }).finally(() => {
+      localStorage.removeItem('sessionToken');
+      window.location.href = '/login';
+    });
+  } else {
+    window.location.href = '/login';
+  }
+}
+
 function mostrarIP() {
   const ip = localStorage.getItem('serverIP') || '192.168.11.50';
   document.getElementById('serverIP').textContent = ip;
@@ -652,11 +685,9 @@ document.getElementById('lista').addEventListener('click', function(e) {
   if (del) {
     const id = parseInt(del.dataset.id);
     if (confirm('¿Eliminar esta incidencia?')) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('DELETE', '/api/incidencias/' + id, true);
-      xhr.setRequestHeader('X-Auth-Pin', savedPin);
-      xhr.onload = function() { if (xhr.status >= 200 && xhr.status < 300) cargar(); };
-      xhr.send();
+      fetch('/api/incidencias/' + id, { method: 'DELETE', headers: { 'X-Auth-Pin': savedPin } })
+        .then(r => { if (r.ok) cargar(); })
+        .catch(e => console.error('Error:', e));
     }
     return;
   }

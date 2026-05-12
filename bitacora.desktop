@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Bitácora Incidencias
+Comment=Bitácora de Incidencias Escolares
+Exec=python3 /home/greenman/Escritorio/bitacora-incidencias/bitacora-app.py
+Icon=/home/greenman/Escritorio/bitacora-incidencias/icon.png
+Terminal=false
+Categories=Education;Office;
+StartupNotify=true
