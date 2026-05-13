@@ -208,7 +208,7 @@ app.get('/api/verify', (req, res) => {
 
 function requireSession(req, res, next) {
   const auth = req.headers['authorization'];
-  const token = auth ? auth.replace('Bearer ', '') : '';
+  const token = auth ? auth.replace('Bearer ', '') : req.query.token;
   if (!token || !sessions[token]) return res.status(401).json({ error: 'Acceso denegado' });
   sessions[token] = Date.now();
   next();

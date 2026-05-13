@@ -409,11 +409,11 @@ document.getElementById('exportMenu').addEventListener('click', function(e) {
     fetch('/api/export/csv').then(r => r.text()).then(txt => {
       document.getElementById('csvContent').textContent = txt;
       document.getElementById('csvModal').style.display = 'flex';
-    });
+    }).catch(() => alert('Error al exportar CSV'));
     this.style.display = 'none';
   }
-  else if (action === 'html') { window.location.href = '/api/export/html'; }
-  else if (action === 'pdf') { window.location.href = '/api/export/html'; }
+  else if (action === 'html') { window.location.href = '/api/export/html?token=' + encodeURIComponent(localStorage.getItem('sessionToken')); }
+  else if (action === 'pdf') { window.location.href = '/api/export/html?token=' + encodeURIComponent(localStorage.getItem('sessionToken')); }
   else if (e.target.classList.contains('btn-close-export') || e.target === this)
     this.style.display = 'none';
 });
