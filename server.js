@@ -10,6 +10,80 @@ const nodemailer = require('nodemailer');
 const app = express();
 const PORT = 3000;
 
+// Security
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'");
+  next();
+});
+
+// Rate limiter (in-memory)
+const rateLimitStore = {};
+setInterval(() => {
+  const now = Date.now();
+  for (const key in rateLimitStore) {
+    if (now - rateLimitStore[key].reset > 60000) delete rateLimitStore[key];
+  }
+}, 30000);
+
+function rateLimit(max, windowMs) {
+  return (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const key = req.path + ':' + ip;
+    const now = Date.now();
+    if (!rateLimitStore[key] || now - rateLimitStore[key].reset > windowMs) {
+      rateLimitStore[key] = { count: 1, reset: now + windowMs };
+      return next();
+    }
+    rateLimitStore[key].count++;
+    if (rateLimitStore[key].count > max) {
+      return res.status(429).json({ error: 'Demasiadas solicitudes. Intente más tarde.' });
+    }
+    next();
+  };
+}
+
+// Brute force protection
+const loginAttempts = {};
+setInterval(() => {
+  const now = Date.now();
+  for (const ip in loginAttempts) {
+    if (now - loginAttempts[ip].lockUntil > 0) delete loginAttempts[ip];
+  }
+}, 60000);
+
+function checkBruteForce(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  if (loginAttempts[ip] && now < loginAttempts[ip].lockUntil) {
+    const remaining = Math.ceil((loginAttempts[ip].lockUntil - now) / 1000);
+    return res.status(429).json({ error: `Demasiados intentos. Espere ${remaining}s.` });
+  }
+  next();
+}
+
+function recordFailedAttempt(ip) {
+  if (!loginAttempts[ip]) loginAttempts[ip] = { count: 0, lockUntil: 0 };
+  loginAttempts[ip].count++;
+  if (loginAttempts[ip].count >= 5) {
+    loginAttempts[ip].lockUntil = Date.now() + 15 * 60 * 1000;
+    loginAttempts[ip].count = 0;
+  }
+}
+
+// Input sanitization helper
+function sanitize(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>&"']/g, function(m) {
+    return ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[m];
+  });
+}
+
 const DISCOVERY_PORT = 45678;
 function getLanIp() {
   const ifaces = os.networkInterfaces();
@@ -107,9 +181,14 @@ setInterval(() => {
   }
 }, 3600000);
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', rateLimit(10, 60000), checkBruteForce, (req, res) => {
   const { pin } = req.body;
-  if (pin !== getPin()) return res.status(401).json({ error: 'PIN incorrecto' });
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  if (pin !== getPin()) {
+    recordFailedAttempt(ip);
+    return res.status(401).json({ error: 'PIN incorrecto' });
+  }
+  delete loginAttempts[ip];
   const token = crypto.randomBytes(32).toString('hex');
   sessions[token] = Date.now();
   res.json({ ok: true, token });
@@ -297,13 +376,26 @@ app.post('/api/pin', requireSession, requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/incidencias', (req, res) => {
-  const { alumno, grupo, descripcion, gravedad, categoria, maestro, foto, ubicacion, personas_involucradas, acciones_realizadas, seguimiento, firma_digital } = req.body;
+app.post('/api/incidencias', rateLimit(30, 60000), (req, res) => {
+  let { alumno, grupo, descripcion, gravedad, categoria, maestro, foto, ubicacion, personas_involucradas, acciones_realizadas, seguimiento, firma_digital } = req.body;
+  alumno = (sanitize(alumno) || '').trim();
+  grupo = (sanitize(grupo) || '').trim();
+  descripcion = (sanitize(descripcion) || '').trim();
+  maestro = (sanitize(maestro) || '').trim();
+  categoria = (sanitize(categoria) || 'Conducta').trim();
+  gravedad = (sanitize(gravedad) || 'Baja').trim();
+  ubicacion = (sanitize(ubicacion) || '').trim();
+  personas_involucradas = (sanitize(personas_involucradas) || '').trim();
+  acciones_realizadas = (sanitize(acciones_realizadas) || '').trim();
+  seguimiento = (sanitize(seguimiento) || '').trim();
+  firma_digital = (sanitize(firma_digital) || '').trim();
+  const VALID_GRAVEDAD = ['Baja', 'Media', 'Alta'];
   if (!alumno || !grupo || !descripcion) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
+  if (!VALID_GRAVEDAD.includes(gravedad)) gravedad = 'Baja';
   const stmt = db.prepare('INSERT INTO incidencias (alumno,grupo,descripcion,gravedad,categoria,maestro,foto,ubicacion,personas_involucradas,acciones_realizadas,seguimiento,firma_digital) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-  const result = stmt.run(alumno, grupo, descripcion, gravedad || 'Baja', categoria || 'Conducta', maestro || '', foto || '', ubicacion || '', personas_involucradas || '', acciones_realizadas || '', seguimiento || '', firma_digital || '');
+  const result = stmt.run(alumno, grupo, descripcion, gravedad, categoria, maestro, foto || '', ubicacion, personas_involucradas, acciones_realizadas, seguimiento, firma_digital);
   const row = db.prepare('SELECT * FROM incidencias WHERE id = ?').get(result.lastInsertRowid);
   broadcast({ type: 'nueva', data: row });
   res.json(row);
