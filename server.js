@@ -808,6 +808,56 @@ app.post('/api/config/email/test', requireSession, requireAuth, async (req, res)
   }
 });
 
+app.get('/api/export/json', requireSession, (req, res) => {
+  const incidencias = db.prepare('SELECT * FROM incidencias ORDER BY id ASC').all();
+  const comentarios = db.prepare('SELECT * FROM comentarios ORDER BY id ASC').all();
+  const categorias = db.prepare('SELECT * FROM categorias ORDER BY id ASC').all();
+  const configRows = db.prepare('SELECT * FROM config').all();
+  res.json({ incidencias, comentarios, categorias, config: configRows });
+});
+
+app.post('/api/import', requireSession, requireAuth, (req, res) => {
+  const { incidencias, comentarios, categorias, config } = req.body;
+  if (!incidencias || !Array.isArray(incidencias)) {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+  try {
+    db.transaction(() => {
+      // Clear existing data
+      db.prepare('DELETE FROM comentarios').run();
+      db.prepare('DELETE FROM incidencias').run();
+      db.prepare('DELETE FROM categorias').run();
+      // Insert categorias
+      const insCat = db.prepare('INSERT OR IGNORE INTO categorias (id, nombre) VALUES (?, ?)');
+      if (categorias) categorias.forEach(c => insCat.run(c.id, c.nombre));
+      // Insert incidencias
+      const insInc = db.prepare(`INSERT OR REPLACE INTO incidencias 
+        (id, alumno, grupo, descripcion, gravedad, categoria, maestro, foto, fecha, resuelta, ubicacion, personas_involucradas, acciones_realizadas, seguimiento, firma_digital) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      incidencias.forEach(i => insInc.run(
+        i.id, i.alumno, i.grupo, i.descripcion, i.gravedad, i.categoria, i.maestro,
+        i.foto || '', i.fecha, i.resuelta ? 1 : 0, i.ubicacion || '',
+        i.personas_involucradas || '', i.acciones_realizadas || '',
+        i.seguimiento || '', i.firma_digital || ''
+      ));
+      // Insert comentarios
+      const insCom = db.prepare('INSERT OR REPLACE INTO comentarios (id, incidencia_id, autor, texto, fecha) VALUES (?, ?, ?, ?, ?)');
+      if (comentarios) comentarios.forEach(c => insCom.run(c.id, c.incidencia_id, c.autor, c.texto, c.fecha));
+      // Restore config (except auth-related keys)
+      if (config) {
+        const skipKeys = ['login_username', 'login_hash'];
+        const insCfg = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)");
+        config.forEach(r => {
+          if (!skipKeys.includes(r.key)) insCfg.run(r.key, r.value);
+        });
+      }
+    })();
+    res.json({ ok: true, imported: incidencias.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Bitácora corriendo en http://0.0.0.0:${PORT}`);
   const os = require('os');
