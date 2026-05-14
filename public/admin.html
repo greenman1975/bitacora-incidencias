@@ -150,6 +150,15 @@
       </div>
     </div>
     <div style="margin:.75rem 0;border-top:1px solid var(--border-light);padding-top:.75rem;">
+      <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">ACCESO AL PANEL</div>
+      <div style="display:flex;flex-direction:column;gap:.4rem;">
+        <input class="form-input" id="loginUserInput" placeholder="Usuario" autocomplete="off">
+        <input class="form-input" id="loginPassInput" type="password" placeholder="Contraseña (mín. 4)" autocomplete="off">
+        <button class="btn btn-outline btn-sm" onclick="guardarCredenciales()">Guardar credenciales</button>
+        <div id="credencialesStatus" style="font-size:.72rem;color:var(--text-muted);"></div>
+      </div>
+    </div>
+    <div style="margin:.75rem 0;border-top:1px solid var(--border-light);padding-top:.75rem;">
       <div style="font-size:.8rem;color:var(--text-secondary);letter-spacing:.04em;margin-bottom:.5rem;">RECORDATORIOS</div>
       <div style="display:flex;gap:.4rem;align-items:center;">
         <span style="font-size:.8rem;color:var(--text-muted);">Alertar si pasan</span>
@@ -816,7 +825,41 @@ async function mostrarConfig() {
     document.getElementById('smtp_secure').value = d.smtp_secure || 'false';
     document.getElementById('report_email').value = d.report_email || '';
   } catch(e) {}
+  // Cargar credenciales
+  try {
+    const r = await fetch('/api/login/config');
+    const d = await r.json();
+    if (d.hasCredentials) {
+      document.getElementById('loginUserInput').value = d.username || '';
+      document.getElementById('credencialesStatus').textContent = '✅ Usuario configurado. Ingresá nueva contraseña para cambiarlo.';
+    } else {
+      document.getElementById('loginUserInput').value = '';
+      document.getElementById('credencialesStatus').textContent = '';
+    }
+  } catch(e) {}
 }
+async function guardarCredenciales() {
+  if (!authed) { showPinDialog(); return; }
+  const username = document.getElementById('loginUserInput').value.trim();
+  const password = document.getElementById('loginPassInput').value;
+  const status = document.getElementById('credencialesStatus');
+  if (!username || username.length < 3) { status.textContent = '❌ Usuario mínimo 3 caracteres'; return; }
+  if (!password || password.length < 4) { status.textContent = '❌ Contraseña mínimo 4 caracteres'; return; }
+  try {
+    const r = await fetch('/api/set-credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Pin': savedPin },
+      body: JSON.stringify({ username, password })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      status.textContent = '✅ Credenciales guardadas. Usalas en el login.';
+      document.getElementById('loginPassInput').value = '';
+    } else { status.textContent = '❌ ' + (d.error || 'Error'); }
+  } catch(e) { status.textContent = '❌ Error de red'; }
+  setTimeout(() => status.textContent = '', 5000);
+}
+
 async function guardarReminderConfig() {
   if (!authed) { showPinDialog(); return; }
   const days = parseInt(document.getElementById('reminderDays').value) || 2;

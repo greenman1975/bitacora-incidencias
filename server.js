@@ -182,16 +182,53 @@ setInterval(() => {
 }, 3600000);
 
 app.post('/api/login', rateLimit(10, 60000), checkBruteForce, (req, res) => {
-  const { pin } = req.body;
+  const { username, password, pin } = req.body;
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  if (pin !== getPin()) {
+  let ok = false;
+
+  // Try username+password first
+  if (username && password) {
+    const storedUser = db.prepare("SELECT value FROM config WHERE key='login_username'").pluck().get();
+    const storedHash = db.prepare("SELECT value FROM config WHERE key='login_hash'").pluck().get();
+    if (storedUser && storedHash) {
+      const [salt, hash] = storedHash.split(':');
+      if (username === storedUser) {
+        const check = crypto.scryptSync(password, salt, 64).toString('hex');
+        if (check === hash) ok = true;
+      }
+    }
+  }
+
+  // Fallback to PIN
+  if (!ok && pin && pin === getPin()) ok = true;
+
+  if (!ok) {
     recordFailedAttempt(ip);
-    return res.status(401).json({ error: 'PIN incorrecto' });
+    return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
   delete loginAttempts[ip];
   const token = crypto.randomBytes(32).toString('hex');
   sessions[token] = Date.now();
   res.json({ ok: true, token });
+});
+
+app.get('/api/login/config', (req, res) => {
+  const storedUser = db.prepare("SELECT value FROM config WHERE key='login_username'").pluck().get();
+  res.json({ hasCredentials: !!storedUser, username: storedUser || null });
+});
+
+app.post('/api/set-credentials', requireSession, requireAuth, (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password || username.length < 3 || password.length < 4) {
+    return res.status(400).json({ error: 'Usuario mínimo 3 caracteres, contraseña mínimo 4' });
+  }
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  db.transaction(() => {
+    db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES ('login_username',?)").run(username);
+    db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES ('login_hash',?)").run(salt + ':' + hash);
+  })();
+  res.json({ ok: true });
 });
 
 app.post('/api/logout', (req, res) => {

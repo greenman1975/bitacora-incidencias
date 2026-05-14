@@ -57,12 +57,6 @@
     background: rgba(239,68,68,.1);
     border-radius: var(--radius-sm);
   }
-  .login-input {
-    width: 100%;
-    text-align: center;
-    font-size: 1.2rem;
-    letter-spacing: .3em;
-  }
   .login-btn {
     width: 100%;
     margin-top: 1rem;
@@ -74,6 +68,16 @@
     font-size: .7rem;
     color: var(--text-muted);
   }
+  .login-toggle {
+    text-align: center;
+    margin-top: .8rem;
+    font-size: .75rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .login-toggle:hover { color: var(--accent); }
+  #pinSection, #userSection { display: none; }
 </style>
 </head>
 <body>
@@ -81,34 +85,99 @@
   <div class="login-card">
     <div class="login-icon">B</div>
     <div class="login-title">Bitácora</div>
-    <div class="login-sub">Ingresá el PIN de Subdirector</div>
-    <div class="login-error" id="loginError">PIN incorrecto</div>
-    <input class="form-input login-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="• • • •" autofocus>
+    <div class="login-sub" id="loginSub">Ingresá tus credenciales</div>
+    <div class="login-error" id="loginError">Credenciales incorrectas</div>
+    <div id="userSection">
+      <input class="form-input" id="usernameInput" placeholder="Usuario" style="width:100%;margin-bottom:.5rem;" autocomplete="username">
+      <input class="form-input" id="passwordInput" type="password" placeholder="Contraseña" style="width:100%;" autocomplete="current-password">
+    </div>
+    <div id="pinSection">
+      <input class="form-input login-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="• • • •">
+    </div>
     <button class="btn btn-primary login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="login-toggle" id="toggleLink" onclick="toggleMode()"></div>
     <div class="login-footer">Sistema de Gestión Escolar</div>
   </div>
 </div>
 <script>
+let mode = 'user';
+
+async function init() {
+  try {
+    const r = await fetch('/api/login/config');
+    const d = await r.json();
+    if (d.hasCredentials) {
+      mode = 'user';
+      document.getElementById('userSection').style.display = 'block';
+      document.getElementById('pinSection').style.display = 'none';
+      document.getElementById('loginSub').textContent = 'Ingresá con usuario y contraseña';
+      document.getElementById('toggleLink').textContent = 'Usar PIN';
+      document.getElementById('usernameInput').focus();
+    } else {
+      mode = 'pin';
+      document.getElementById('userSection').style.display = 'none';
+      document.getElementById('pinSection').style.display = 'block';
+      document.getElementById('loginSub').textContent = 'Ingresá el PIN de Subdirector';
+      document.getElementById('toggleLink').textContent = '';
+      document.getElementById('pinInput').focus();
+    }
+  } catch(e) {
+    mode = 'pin';
+    document.getElementById('pinSection').style.display = 'block';
+    document.getElementById('userSection').style.display = 'none';
+    document.getElementById('pinInput').focus();
+  }
+}
+
+function toggleMode() {
+  if (mode === 'user') {
+    mode = 'pin';
+    document.getElementById('userSection').style.display = 'none';
+    document.getElementById('pinSection').style.display = 'block';
+    document.getElementById('loginSub').textContent = 'Ingresá el PIN de Subdirector';
+    document.getElementById('toggleLink').textContent = 'Usar usuario';
+    document.getElementById('pinInput').focus();
+  } else {
+    mode = 'user';
+    document.getElementById('userSection').style.display = 'block';
+    document.getElementById('pinSection').style.display = 'none';
+    document.getElementById('loginSub').textContent = 'Ingresá con usuario y contraseña';
+    document.getElementById('toggleLink').textContent = 'Usar PIN';
+    document.getElementById('usernameInput').focus();
+  }
+}
+
 async function doLogin() {
-  const pin = document.getElementById('pinInput').value;
   const btn = document.getElementById('loginBtn');
   const err = document.getElementById('loginError');
-  if (!pin) return;
+  err.style.display = 'none';
+
+  let body;
+  if (mode === 'user') {
+    const username = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passwordInput').value;
+    if (!username || !password) { err.textContent = 'Completá todos los campos'; err.style.display = 'block'; return; }
+    body = { username, password };
+  } else {
+    const pin = document.getElementById('pinInput').value;
+    if (!pin) return;
+    body = { pin };
+  }
+
   btn.disabled = true;
   btn.textContent = 'Ingresando...';
-  err.style.display = 'none';
   try {
     const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin })
+      body: JSON.stringify(body)
     });
     const d = await r.json();
     if (d.ok) {
       localStorage.setItem('sessionToken', d.token);
       window.location.href = '/';
     } else {
-      err.textContent = 'PIN incorrecto';
+      err.textContent = 'Credenciales incorrectas';
       err.style.display = 'block';
     }
   } catch(e) {
@@ -118,10 +187,14 @@ async function doLogin() {
   btn.disabled = false;
   btn.textContent = 'Entrar';
 }
-document.getElementById('pinInput').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') doLogin();
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const btn = document.getElementById('loginBtn');
+    if (!btn.disabled) doLogin();
+  }
 });
-document.getElementById('pinInput').focus();
+init();
 </script>
 </body>
 </html>
