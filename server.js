@@ -166,6 +166,23 @@ try { db.exec("ALTER TABLE incidencias ADD COLUMN personas_involucradas TEXT DEF
 try { db.exec("ALTER TABLE incidencias ADD COLUMN acciones_realizadas TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE incidencias ADD COLUMN seguimiento TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE incidencias ADD COLUMN firma_digital TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS actividad_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    accion TEXT NOT NULL,
+    detalle TEXT DEFAULT '',
+    usuario TEXT DEFAULT '',
+    ip TEXT DEFAULT '',
+    fecha TEXT NOT NULL DEFAULT (datetime('now','-3 hours'))
+  )
+`); } catch(e) {}
+
+function logActividad(accion, detalle = '', usuario = '', ip = '') {
+  try {
+    db.prepare('INSERT INTO actividad_log (accion, detalle, usuario, ip) VALUES (?,?,?,?)')
+      .run(accion, detalle, usuario, ip);
+  } catch(e) {}
+}
 
 const getPin = () => db.prepare("SELECT value FROM config WHERE key='pin'").pluck().get() || '1234';
 const setPin = (pin) => db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES (?,?)").run('pin', pin);
@@ -209,6 +226,7 @@ app.post('/api/login', rateLimit(10, 60000), checkBruteForce, (req, res) => {
   delete loginAttempts[ip];
   const token = crypto.randomBytes(32).toString('hex');
   sessions[token] = Date.now();
+  logActividad('login', username ? 'Usuario: ' + username : 'PIN', '', ip);
   res.json({ ok: true, token });
 });
 
@@ -228,6 +246,7 @@ app.post('/api/set-credentials', requireSession, requireAuth, (req, res) => {
     db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES ('login_username',?)").run(username);
     db.prepare("INSERT OR REPLACE INTO config (key,value) VALUES ('login_hash',?)").run(salt + ':' + hash);
   })();
+  logActividad('credenciales', 'Usuario cambiado a: ' + username);
   res.json({ ok: true });
 });
 
@@ -459,6 +478,7 @@ app.put('/api/incidencias/:id', requireSession, requireAuth, (req, res) => {
     .run(alumno, grupo, descripcion, gravedad, categoria, resuelta ? 1 : 0, ubicacion || '', personas_involucradas || '', acciones_realizadas || '', seguimiento || '', firma_digital || '', req.params.id);
   const row = db.prepare('SELECT * FROM incidencias WHERE id = ?').get(req.params.id);
   broadcast({ type: 'editada', data: row });
+  logActividad('editar', 'Incidencia #' + req.params.id + ': ' + (row?.alumno || ''));
   res.json(row);
 });
 
@@ -466,13 +486,16 @@ app.patch('/api/incidencias/:id', requireSession, (req, res) => {
   const { resuelta } = req.body;
   db.prepare('UPDATE incidencias SET resuelta = ? WHERE id = ?').run(resuelta ? 1 : 0, req.params.id);
   broadcast({ type: 'resuelta', id: parseInt(req.params.id), resuelta: !!resuelta });
+  logActividad(resuelta ? 'resolver' : 'reabrir', 'Incidencia #' + req.params.id);
   res.json({ ok: true });
 });
 
 app.delete('/api/incidencias/:id', requireSession, requireAuth, (req, res) => {
+  const old = db.prepare('SELECT alumno FROM incidencias WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM comentarios WHERE incidencia_id = ?').run(req.params.id);
   db.prepare('DELETE FROM incidencias WHERE id = ?').run(req.params.id);
   broadcast({ type: 'eliminada', id: parseInt(req.params.id) });
+  logActividad('eliminar', 'Incidencia #' + req.params.id + ': ' + (old?.alumno || ''));
   res.json({ ok: true });
 });
 
@@ -806,6 +829,11 @@ app.post('/api/config/email/test', requireSession, requireAuth, async (req, res)
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/api/actividad', requireSession, (req, res) => {
+  const rows = db.prepare('SELECT * FROM actividad_log ORDER BY fecha DESC LIMIT 100').all();
+  res.json(rows);
 });
 
 app.get('/api/export/json', requireSession, (req, res) => {
