@@ -20,6 +20,7 @@ function request(method, urlPath, body, token) {
       headers: { 'Content-Type': 'application/json' }
     };
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (PIN) opts.headers['X-Auth-Pin'] = PIN;
     if (body) opts.headers['Content-Length'] = Buffer.byteLength(body);
 
     const req = (url.protocol === 'https:' ? https : http).request(opts, res => {
