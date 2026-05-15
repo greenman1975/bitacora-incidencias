@@ -237,16 +237,6 @@
 
 <div id="actividadModal" class="modal-overlay" style="display:none;">
   <div class="modal" style="max-width:90%;max-height:80%;">
-    <h3>📋 Actividad reciente</h3>
-    <div id="actividadList" style="max-height:60vh;overflow-y:auto;font-size:.78rem;margin-bottom:.75rem;"></div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="document.getElementById('actividadModal').style.display='none'" style="flex:1;">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<div id="actividadModal" class="modal-overlay" style="display:none;">
-  <div class="modal" style="max-width:90%;max-height:80%;">
     <h3>Actividad reciente</h3>
     <div id="actividadList" style="max-height:60vh;overflow-y:auto;font-size:.78rem;margin-bottom:.75rem;"></div>
     <div class="modal-actions">
@@ -482,24 +472,33 @@ function mostrarOnlineLista() {
 setInterval(actualizarOnline, 5000);
 
 async function cargarMaestros() {
-  const r = await fetch('/api/incidencias');
-  const datos = await r.json();
-  const maestros = [...new Set(datos.map(d => d.maestro).filter(Boolean))];
-  const sel = document.getElementById('filtroMaestro');
-  sel.innerHTML = '<option value="">Todos</option>' + maestros.map(m => `<option>${m}</option>`).join('');
+  try {
+    const r = await fetch('/api/incidencias');
+    const datos = await r.json();
+    if (!Array.isArray(datos)) return;
+    const maestros = [...new Set(datos.map(d => d.maestro).filter(Boolean))];
+    document.getElementById('filtroMaestro').innerHTML = '<option value="">Todos</option>' + maestros.map(m => `<option>${m}</option>`).join('');
+  } catch(e) {}
 }
 
 async function cargarCategoriasSelects() {
-  const r = await fetch('/api/categorias');
-  const cats = await r.json();
-  const opts = cats.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
-  document.getElementById('filtroCategoria').innerHTML = '<option value="">Categoría</option>' + opts;
-  document.getElementById('editCategoria').innerHTML = opts;
+  try {
+    const r = await fetch('/api/categorias');
+    const cats = await r.json();
+    if (!Array.isArray(cats)) return;
+    const opts = cats.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    document.getElementById('filtroCategoria').innerHTML = '<option value="">Categoría</option>' + opts;
+    document.getElementById('editCategoria').innerHTML = opts;
+  } catch(e) {}
 }
 
 async function cargar() {
-  const r = await fetch('/api/incidencias');
-  const datos = await r.json();
+  let datos;
+  try {
+    const r = await fetch('/api/incidencias');
+    datos = await r.json();
+    if (!Array.isArray(datos)) throw new Error('Respuesta inválida');
+  } catch(e) { datos = []; }
   const filtro = document.getElementById('filtro').value.toLowerCase();
   const m = document.getElementById('filtroMaestro').value;
   const cat = document.getElementById('filtroCategoria').value;
