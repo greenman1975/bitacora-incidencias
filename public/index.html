@@ -106,13 +106,14 @@ let fotoData = '';
 
 // Lógica de Conexión Universal
 function checkConnection() {
+  const host = window.location.hostname;
   const savedUrl = localStorage.getItem('serverUrl');
-  if (!savedUrl && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+  const isCloud = host.includes('onrender.com') || host.includes('bitacora-incidencias');
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '192.168.11.50';
+  if (!savedUrl && !isLocal && !isCloud) {
     document.getElementById('setupScreen').style.display = 'flex';
-    document.getElementById('mainApp').style.display = 'none';
   } else {
     document.getElementById('setupScreen').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
   }
 }
 
