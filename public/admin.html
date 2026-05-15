@@ -276,7 +276,7 @@
         opts.headers['Authorization'] = 'Bearer ' + token;
       }
     }
-    return origFetch.call(this, url, opts);
+    return origFetch.call(window, url, opts);
   };
 })();
 
@@ -348,7 +348,12 @@ async function mostrarContextoAlumno(nueva) {
 const evtSource = new EventSource('/api/events');
 evtSource.onopen = () => { setOnline(true); };
 evtSource.onerror = () => { setOnline(false); };
-if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+try {
+  if ('Notification' in window && Notification.permission === 'default') {
+    let p = Notification.requestPermission();
+    if (p && p.catch) p.catch(()=>{});
+  }
+} catch(e) {}
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
@@ -765,23 +770,22 @@ async function mostrarActividad() {
   try {
     const r = await fetch('/api/actividad');
     const datos = await r.json();
-    if (datos.length === 0) {
+    if (!datos || datos.length === 0) {
       document.getElementById('actividadList').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">Sin actividad registrada</div>';
       return;
     }
-    document.getElementById('actividadList').innerHTML = datos.map(d => '
-      <div style="padding:.4rem 0;border-bottom:1px solid var(--border-light);">
-        <span style="color:var(--accent);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;">' + d.accion + '</span>
-        <div style="color:var(--text-secondary);font-size:.75rem;margin-top:2px;">' + (d.detalle || '') + '</div>
-        <div style="font-size:.62rem;color:var(--text-muted);margin-top:2px;">' + (d.fecha ? d.fecha.slice(5,19) : '') + '</div>
-      </div>
-    ').join('');
+    document.getElementById('actividadList').innerHTML = datos.map(d =>
+      `<div style="padding:.4rem 0;border-bottom:1px solid var(--border-light);">
+        <span style="color:var(--accent);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;">${d.accion}</span>
+        <div style="color:var(--text-secondary);font-size:.75rem;margin-top:2px;">${d.detalle || ''}</div>
+        <div style="font-size:.62rem;color:var(--text-muted);margin-top:2px;">${d.fecha ? d.fecha.slice(5,19) : ''}</div>
+      </div>`
+    ).join('');
   } catch(e) {
     document.getElementById('actividadList').innerHTML = '<div style="text-align:center;color:var(--danger);padding:1rem;">Error al cargar</div>';
   }
 }
 
-// Backup
 // Backup
 async function guardarBackupConfig() {
   if (!authed) { showPinDialog(); return; }
