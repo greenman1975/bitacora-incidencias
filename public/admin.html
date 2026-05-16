@@ -419,10 +419,14 @@ function showPinDialog(action = null) { pendingAuthAction = action; document.get
 function closePinDialog() { document.getElementById('pinDialog').style.display = 'none'; pendingAuthAction = null; }
 async function authPin() {
   const pin = document.getElementById('pinInput').value;
-  const r = await fetch('/api/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
+  const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
   const data = await r.json();
   if (data.ok) { 
-    authed = true; savedPin = pin; closePinDialog(); document.getElementById('authBtn').textContent = 'Subdirector'; cargar(); 
+    authed = true; savedPin = pin; 
+    if (data.token) localStorage.setItem('sessionToken', data.token);
+    closePinDialog(); 
+    document.getElementById('authBtn').textContent = 'Subdirector'; 
+    cargar(); 
     if (pendingAuthAction) { const act = pendingAuthAction; pendingAuthAction = null; act(); }
   }
   else { document.getElementById('pinError').style.display = 'block'; }
@@ -492,18 +496,27 @@ function showExportMenu(el) {
   document.getElementById('exportMenu').style.display = 'flex'; 
 }
 document.getElementById('exportMenu').addEventListener('click', function(e) {
-  const action = e.target.dataset.action;
+  const btn = e.target.closest('[data-action]');
+  if (!btn) {
+    if (e.target.classList.contains('btn-close-export') || e.target === this) this.style.display = 'none';
+    return;
+  }
+  const action = btn.dataset.action;
+  const token = localStorage.getItem('sessionToken');
+  
   if (action === 'csv') {
-    fetch('/api/export/csv').then(r => r.text()).then(txt => {
-      document.getElementById('csvContent').textContent = txt;
-      document.getElementById('csvModal').style.display = 'flex';
-    }).catch(() => alert('Error al exportar CSV'));
+    fetch('/api/export/csv?token=' + encodeURIComponent(token))
+      .then(r => r.text())
+      .then(txt => {
+        document.getElementById('csvContent').textContent = txt;
+        document.getElementById('csvModal').style.display = 'flex';
+      }).catch(() => alert('Error al exportar CSV (Verifica tu sesión)'));
     this.style.display = 'none';
   }
-  else if (action === 'html') { window.location.href = '/api/export/html?token=' + encodeURIComponent(localStorage.getItem('sessionToken')); }
-  else if (action === 'pdf') { window.location.href = '/api/export/html?token=' + encodeURIComponent(localStorage.getItem('sessionToken')); }
-  else if (e.target.classList.contains('btn-close-export') || e.target === this)
+  else if (action === 'html' || action === 'pdf') { 
+    window.location.href = '/api/export/html?token=' + encodeURIComponent(token); 
     this.style.display = 'none';
+  }
 });
 document.getElementById('csvModal').addEventListener('click', function(e) {
   if (e.target.classList.contains('btn-csv-close') || e.target === this)
