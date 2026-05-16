@@ -564,9 +564,25 @@ async function cargar() {
   const list = document.getElementById('lista');
   if (filtrados.length === 0) { empty.style.display = 'block'; list.innerHTML = ''; return; }
   empty.style.display = 'none';
-  list.innerHTML = filtrados.map(d => `
-    <div class="card ${d.resuelta ? 'resuelta' : ''}" 
-      data-id="${d.id}" 
+  
+  // Update widgets
+  if(document.getElementById('w-total')) document.getElementById('w-total').textContent = datos.length;
+  if(document.getElementById('w-pendientes')) document.getElementById('w-pendientes').textContent = datos.filter(x=>!x.resuelta).length;
+  if(document.getElementById('w-resueltas')) document.getElementById('w-resueltas').textContent = datos.filter(x=>x.resuelta).length;
+
+  list.innerHTML = filtrados.map(d => {
+    let gravColor, gravBg;
+    if (d.gravedad === 'Alta' && !d.resuelta) { gravColor = '#c53030'; gravBg = '#fed7d7'; }
+    else if (d.gravedad === 'Alta') { gravColor = '#975a16'; gravBg = '#feebc8'; }
+    else if (d.gravedad === 'Media') { gravColor = '#2b6cb0'; gravBg = '#bee3f8'; }
+    else { gravColor = '#2f855a'; gravBg = '#c6f6d5'; }
+    
+    let estColor = d.resuelta ? '#48bb78' : '#e53e3e';
+    let estBg = d.resuelta ? 'Resuelta' : 'Abierta';
+    
+    const avatar = (d.maestro || 'SA').substring(0, 2).toUpperCase();
+    
+    return `<tr class="${d.resuelta ? 'resuelta' : ''}" data-id="${d.id}"
       data-alumno="${(d.alumno||'').replace(/"/g,'&quot;')}" 
       data-grupo="${(d.grupo||'').replace(/"/g,'&quot;')}" 
       data-desc="${(d.descripcion||'').replace(/"/g,'&quot;')}" 
@@ -576,34 +592,41 @@ async function cargar() {
       data-personas="${(d.personas_involucradas||'').replace(/"/g,'&quot;')}"
       data-acciones="${(d.acciones_realizadas||'').replace(/"/g,'&quot;')}"
       data-seguimiento="${(d.seguimiento||'').replace(/"/g,'&quot;')}">
-      <div class="card-head">
-        <span class="card-head-name">${d.alumno}</span>
-        <span class="card-head-meta">${d.grupo}</span>
-        <span class="badge badge-${d.gravedad.toLowerCase()}">${d.gravedad}</span>
-      </div>
-      <div class="detail-row">
-        <span>👤 ${d.maestro || '—'}</span>
-        <span>📂 ${d.categoria}</span>
-        ${d.ubicacion ? `<span>📍 ${d.ubicacion}</span>` : ''}
-        <span class="status-dot ${d.resuelta ? 'status-closed' : 'status-open'}"></span>
-        <span>${d.resuelta ? 'Resuelta' : 'Pendiente'}</span>
-      </div>
-      <div class="card-body">${d.descripcion}</div>
-      ${d.personas_involucradas ? `<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.2rem;">👥 ${d.personas_involucradas}</div>` : ''}
-      ${d.acciones_realizadas ? `<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.2rem;">→ ${d.acciones_realizadas}</div>` : ''}
-      ${d.foto ? `<img class="card-photo" src="${d.foto}" loading="lazy">` : ''}
-      <div class="card-foot">
-        <span>#${d.id} · ${d.fecha?.slice(5,16) || d.fecha}</span>
-        <div style="display:flex;gap:.3rem;align-items:center;">
-          ${authed ? `<button class="btn-edit btn btn-outline btn-sm btn-icon" data-id="${d.id}" title="Editar">✏️</button>
-          <button class="btn-delete btn btn-outline btn-sm btn-icon btn-danger" data-id="${d.id}" title="Eliminar">🗑️</button>` : ''}
-          <button class="btn btn-outline btn-sm btn-icon" onclick="verComentarios(${d.id})" title="Comentarios">💬</button>
-          <label class="resolved-chk">
-            <input type="checkbox" ${d.resuelta ? 'checked' : ''} onchange="toggle(${d.id}, this.checked)">
-            Resuelta
-          </label>
-  </div>
-</div>`).join('');
+      
+      <td><span class="id-badge">#${String(d.id).padStart(4, '0')}</span></td>
+      <td>
+        <div class="td-title">${d.alumno}</div>
+        <div class="td-sub">${d.descripcion.substring(0, 40)}${d.descripcion.length > 40 ? '...' : ''}</div>
+      </td>
+      <td class="td-server">${d.grupo || 'SRV-APP-03'}</td>
+      <td>
+        <span class="priority-badge" style="background:${gravBg}; color:${gravColor};">
+          <span class="dot" style="background:${gravColor};"></span> ${d.gravedad}
+        </span>
+      </td>
+      <td>
+        <span class="status-cell">
+          <span class="dot" style="background:${estColor};"></span> ${estBg}
+        </span>
+      </td>
+      <td>
+        <div class="assigned-cell">
+          <div class="avatar">${avatar}</div>
+          <span class="assigned-name">${d.maestro || 'Sin asignar'}</span>
+        </div>
+      </td>
+      <td>
+        <div class="date-cell">
+          <span>${d.fecha?.slice(5,16).replace('-','/') || ''}</span>
+          ${authed ? `<div class="circle-btn sm btn-edit" data-id="${d.id}" style="cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px;">✏️</div>
+                      <div class="circle-btn sm btn-delete" data-id="${d.id}" style="cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px; color:#e53e3e;">🗑️</div>` : ''}
+          <div class="circle-btn sm" onclick="verComentarios(${d.id})" style="cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px;">💬</div>
+          <input type="checkbox" style="cursor:pointer; width:16px; height:16px;" ${d.resuelta ? 'checked' : ''} onchange="toggle(${d.id}, this.checked)">
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
 }
 async function toggle(id, val) {
   await fetch('/api/incidencias/' + id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({resuelta: val}) });
