@@ -509,7 +509,12 @@ function doExport(action) {
       }).catch(() => alert('Error al exportar CSV (Verifica tu sesión)'));
     menu.style.display = 'none';
   } else {
-    window.location.href = '/api/export/html?token=' + encodeURIComponent(token);
+    const url = '/api/export/html?token=' + encodeURIComponent(token);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      // If popup blocked, fallback to same tab
+      window.location.href = url;
+    }
     menu.style.display = 'none';
   }
 }
@@ -844,18 +849,26 @@ document.getElementById('lista').addEventListener('click', function(e) {
   }
 });
 
-if (!localStorage.getItem('sessionToken')) {
+const token = localStorage.getItem('sessionToken');
+if (token) {
+  fetch('/api/incidencias').then(r => {
+    if (r.ok) {
+      authed = true;
+      cargar(); cargarMaestros(); cargarCategoriasSelects();
+    } else {
+      localStorage.removeItem('sessionToken');
+      showPinDialog(() => { cargar(); cargarMaestros(); cargarCategoriasSelects(); });
+    }
+  }).catch(() => {
+     // Network error, maybe offline? Still show dialog to be safe
+     showPinDialog(() => { cargar(); cargarMaestros(); cargarCategoriasSelects(); });
+  });
+} else {
   showPinDialog(() => {
     cargar();
     cargarMaestros();
     cargarCategoriasSelects();
   });
-} else {
-  authed = true;
-  // Note: savedPin remains empty until they re-enter it, but viewing works.
-  cargar();
-  cargarMaestros();
-  cargarCategoriasSelects();
 }
 
 // QR
