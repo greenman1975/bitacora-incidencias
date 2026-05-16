@@ -303,17 +303,13 @@
 <script>
 // Session check
 (function() {
-  const token = localStorage.getItem('sessionToken');
-  if (!token) {
-    window.location.href = '/login';
-    return;
-  }
   const origFetch = window.fetch;
   window.fetch = function(url, opts) {
+    const token = localStorage.getItem('sessionToken');
     if (!opts) opts = {};
     if (typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login') && !url.startsWith('/api/verify')) {
       opts.headers = opts.headers || {};
-      if (!opts.headers['Authorization']) {
+      if (token && !opts.headers['Authorization']) {
         opts.headers['Authorization'] = 'Bearer ' + token;
       }
     }
@@ -844,9 +840,19 @@ document.getElementById('lista').addEventListener('click', function(e) {
   }
 });
 
-cargarMaestros();
-cargarCategoriasSelects();
-cargar();
+if (!localStorage.getItem('sessionToken')) {
+  showPinDialog(() => {
+    cargar();
+    cargarMaestros();
+    cargarCategoriasSelects();
+  });
+} else {
+  authed = true;
+  // Note: savedPin remains empty until they re-enter it, but viewing works.
+  cargar();
+  cargarMaestros();
+  cargarCategoriasSelects();
+}
 
 // QR
 async function mostrarQR() {
