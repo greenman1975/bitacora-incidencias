@@ -110,8 +110,13 @@ function checkConnection() {
   const savedUrl = localStorage.getItem('serverUrl');
   const isCloud = host.includes('onrender.com') || host.includes('bitacora-incidencias');
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '192.168.11.50';
-  if (!savedUrl && !isLocal && !isCloud) {
-    document.getElementById('setupScreen').style.display = 'flex';
+  
+  if (!isCloud && !isLocal) {
+    if (savedUrl) {
+      window.location.href = savedUrl;
+    } else {
+      document.getElementById('setupScreen').style.display = 'flex';
+    }
   } else {
     document.getElementById('setupScreen').style.display = 'none';
   }

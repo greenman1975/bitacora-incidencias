@@ -373,18 +373,22 @@ function setOnline(online) {
   else { dot.style.background = '#FF453A'; txt.textContent = 'Desconectado'; }
 }
 
-function showPinDialog() { document.getElementById('pinDialog').style.display = 'flex'; document.getElementById('pinInput').value = ''; document.getElementById('pinError').style.display = 'none'; }
-function closePinDialog() { document.getElementById('pinDialog').style.display = 'none'; }
+let pendingAuthAction = null;
+function showPinDialog(action = null) { pendingAuthAction = action; document.getElementById('pinDialog').style.display = 'flex'; document.getElementById('pinInput').value = ''; document.getElementById('pinError').style.display = 'none'; }
+function closePinDialog() { document.getElementById('pinDialog').style.display = 'none'; pendingAuthAction = null; }
 async function authPin() {
   const pin = document.getElementById('pinInput').value;
   const r = await fetch('/api/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
   const data = await r.json();
-  if (data.ok) { authed = true; savedPin = pin; closePinDialog(); document.getElementById('authBtn').textContent = 'Subdirector'; cargar(); }
+  if (data.ok) { 
+    authed = true; savedPin = pin; closePinDialog(); document.getElementById('authBtn').textContent = 'Subdirector'; cargar(); 
+    if (pendingAuthAction) { const act = pendingAuthAction; pendingAuthAction = null; act(); }
+  }
   else { document.getElementById('pinError').style.display = 'block'; }
 }
 
 function editIncidencia(id) {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => editIncidencia(id)); return; }
   const card = document.querySelector(`[data-id="${id}"]`);
   if (!card) return;
   editId = id;
@@ -638,8 +642,8 @@ function makeLineChart(id, labels, data) {
   gradient.addColorStop(1, 'rgba(0, 122, 255, 0)');
   chartInstances[id] = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [{ data, fill: true, backgroundColor: gradient, borderColor: '#007AFF', borderWidth: 2, pointBackgroundColor: '#007AFF', pointRadius: 2, pointHoverRadius: 4, tension: .3 }] },
-    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#55557A', font: { size: 9 }, maxTicksLimit: 8 } }, y: { beginAtZero: true, ticks: { color: '#55557A', stepSize: 1 } } } }
+    data: { labels, datasets: [{ data, fill: true, backgroundColor: gradient, borderColor: '#2563eb', borderWidth: 2, pointBackgroundColor: '#2563eb', pointRadius: 2, pointHoverRadius: 4, tension: .3 }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8 } }, y: { beginAtZero: true, ticks: { color: '#64748b', stepSize: 1 } } } }
   });
 }
 function makeChart(id, labels, data, colors) {
@@ -661,18 +665,18 @@ function makeChart(id, labels, data, colors) {
       maintainAspectRatio: true, 
       plugins: { 
         legend: { display: false },
-        tooltip: { backgroundColor: '#181825', titleColor: '#f1f1f5', bodyColor: '#a0a0b8', borderColor: '#2a2a3e', borderWidth: 1, padding: 10, cornerRadius: 8 }
+        tooltip: { backgroundColor: '#ffffff', titleColor: '#0f172a', bodyColor: '#334155', borderColor: '#e2e8f0', borderWidth: 1, padding: 10, cornerRadius: 8 }
       }, 
       scales: { 
-        y: { beginAtZero: true, grid: { color: '#1e1e30' }, ticks: { color: '#6b6b85', stepSize: 1 } },
-        x: { grid: { display: false }, ticks: { color: '#6b6b85', font: { size: 9 } } }
+        y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#64748b', stepSize: 1 } },
+        x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 9 } } }
       } 
     }
   });
 }
 
 async function guardarEmailConfig() {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => guardarEmailConfig()); return; }
   const body = {
     smtp_host: document.getElementById('smtp_host').value,
     smtp_port: document.getElementById('smtp_port').value,
@@ -688,7 +692,7 @@ async function guardarEmailConfig() {
 }
 
 async function testEmail() {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => testEmail()); return; }
   const btn = event.target;
   btn.textContent = 'Enviando...';
   const body = {
@@ -788,7 +792,7 @@ async function mostrarActividad() {
 
 // Backup
 async function guardarBackupConfig() {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => guardarBackupConfig()); return; }
   const interval = parseInt(document.getElementById('backupInterval').value);
   try {
     const r = await fetch('/api/backup/config', { method:'PUT', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify({interval}) });
@@ -886,7 +890,7 @@ async function mostrarConfig() {
   } catch(e) {}
 }
 async function guardarCredenciales() {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => guardarCredenciales()); return; }
   const username = document.getElementById('loginUserInput').value.trim();
   const password = document.getElementById('loginPassInput').value;
   const status = document.getElementById('credencialesStatus');
@@ -908,7 +912,7 @@ async function guardarCredenciales() {
 }
 
 async function guardarReminderConfig() {
-  if (!authed) { showPinDialog(); return; }
+  if (!authed) { showPinDialog(() => guardarReminderConfig()); return; }
   const days = parseInt(document.getElementById('reminderDays').value) || 2;
   try {
     const r = await fetch('/api/reminder/config', { method:'PUT', headers:{'Content-Type':'application/json','X-Auth-Pin':savedPin}, body:JSON.stringify({days}) });

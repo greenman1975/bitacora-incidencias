@@ -1,24 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-card: #181825;
-  --bg-hover: #1e1e30;
-  --border: #2a2a3e;
-  --border-light: #1e1e30;
-  --text-primary: #f1f1f5;
-  --text-secondary: #a0a0b8;
-  --text-muted: #6b6b85;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --success: #22c55e;
-  --warning: #eab308;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-hover: #f8fafc;
+  --border: #cbd5e1;
+  --border-light: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --success: #10b981;
+  --warning: #f59e0b;
   --danger: #ef4444;
   --radius-sm: 6px;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
-  --shadow-lg: 0 10px 40px rgba(0,0,0,.4);
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.03);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,.06);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,10 +39,10 @@ body {
 
 /* ── Top Bar ── */
 .app-bar {
-  background: rgba(18, 18, 26, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   padding: .7rem 1.5rem;
   font-size: .9rem;
   font-weight: 600;
@@ -208,6 +208,7 @@ body {
   margin-bottom: .65rem;
   transition: all .2s ease;
   animation: slideUp .3s ease;
+  box-shadow: var(--shadow);
 }
 .card:hover { border-color: var(--border); }
 .card.resuelta { opacity: .45; }
@@ -317,8 +318,8 @@ body {
 .btn-outline:hover { background: var(--bg-hover); border-color: var(--text-muted); color: var(--text-primary); }
 .btn-sm { padding: .3rem .65rem; font-size: .7rem; }
 .btn-icon { padding: .3rem; min-width: 30px; }
-.btn-danger { color: var(--danger); border-color: rgba(239, 68, 68, .3); }
-.btn-danger:hover { background: rgba(239, 68, 68, .08); border-color: var(--danger); color: var(--danger); }
+.btn-danger { color: var(--danger); border-color: rgba(239, 68, 68, .4); }
+.btn-danger:hover { background: rgba(239, 68, 68, .1); border-color: var(--danger); color: var(--danger); }
 .btn:disabled { opacity: .3; pointer-events: none; }
 
 /* ── Form Card ── */
@@ -355,7 +356,7 @@ body {
   -moz-appearance: none !important;
   appearance: none !important;
   padding-right: 28px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6b85' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23334155' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
 }
@@ -399,8 +400,8 @@ body {
   display: flex;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, .7);
-  backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, .4);
+  backdrop-filter: blur(4px);
   z-index: 1000;
   align-items: center;
   justify-content: center;
