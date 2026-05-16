@@ -488,12 +488,16 @@ function filtrarBitacora(cat, el) {
 }
 
 function showExportMenu(el) { 
-  if (!authed) { showPinDialog(() => showExportMenu(el)); return; }
   setActiveMenu(el);
   document.getElementById('exportMenu').style.display = 'flex'; 
 }
 
 function doExport(action) {
+  if (!authed) { 
+    showPinDialog(() => doExport(action)); 
+    document.getElementById('exportMenu').style.display = 'none';
+    return; 
+  }
   const token = localStorage.getItem('sessionToken');
   const menu = document.getElementById('exportMenu');
   if (action === 'csv') {
