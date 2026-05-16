@@ -22,25 +22,25 @@
     
     <div class="sidebar-menu">
       <div class="menu-label">PRINCIPAL</div>
-      <a href="#" class="menu-item active">
+      <a href="#" class="menu-item active" onclick="filtrarBitacora('todos', this)">
         <span>Bitácora</span>
-        <span class="badge-count" id="countBadge">14</span>
+        <span class="badge-count" id="countBadge">0</span>
       </a>
-      <a href="#" class="menu-item" onclick="toggleDashboard()"><span>Tablero</span></a>
-      <a href="#" class="menu-item" onclick="showExportMenu()"><span>Reportes</span></a>
+      <a href="#" class="menu-item" onclick="toggleDashboard(this)"><span>Tablero</span></a>
+      <a href="#" class="menu-item" onclick="showExportMenu(this)"><span>Reportes</span></a>
       
       <div class="menu-label" style="margin-top:1.5rem;">INFRAESTRUCTURA</div>
-      <a href="#" class="menu-item"><span>Servidores</span></a>
-      <a href="#" class="menu-item"><span>Red</span></a>
-      <a href="#" class="menu-item"><span>Bases de datos</span></a>
+      <a href="#" class="menu-item" onclick="filtrarBitacora('Servidores', this)"><span>Servidores</span></a>
+      <a href="#" class="menu-item" onclick="filtrarBitacora('Red', this)"><span>Red</span></a>
+      <a href="#" class="menu-item" onclick="filtrarBitacora('Bases de datos', this)"><span>Bases de datos</span></a>
       
       <div class="menu-label" style="margin-top:1.5rem;">SISTEMA</div>
-      <a href="#" class="menu-item" onclick="toggleOnlineList()">
+      <a href="#" class="menu-item" onclick="toggleOnlineList(this)">
         <span>Alertas</span>
-        <span class="badge-count" id="onlineCount">3</span>
+        <span class="badge-count" id="onlineCount">0</span>
       </a>
-      <a href="#" class="menu-item"><span>Usuarios</span></a>
-      <a href="#" class="menu-item" onclick="mostrarConfig()"><span>Configuración</span></a>
+      <a href="#" class="menu-item" onclick="filtrarBitacora('Usuarios', this)"><span>Usuarios</span></a>
+      <a href="#" class="menu-item" onclick="mostrarConfig(this)"><span>Configuración</span></a>
     </div>
     
     <div class="sidebar-footer">
@@ -472,7 +472,25 @@ function deleteIncidencia(id) {
     .catch(e => console.error('Error:', e));
 }
 
-function showExportMenu() { document.getElementById('exportMenu').style.display = 'flex'; }
+function setActiveMenu(el) {
+  if (!el) return;
+  document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function filtrarBitacora(cat, el) {
+  setActiveMenu(el);
+  window.filtroSidebarCategoria = cat === 'todos' ? '' : cat;
+  // If we are filtering by a category that doesn't exist, maybe we should alert?
+  // No, just filter and let them see empty list.
+  if (document.getElementById('dashboard')) document.getElementById('dashboard').style.display = 'none';
+  cargar();
+}
+
+function showExportMenu(el) { 
+  setActiveMenu(el);
+  document.getElementById('exportMenu').style.display = 'flex'; 
+}
 document.getElementById('exportMenu').addEventListener('click', function(e) {
   const action = e.target.dataset.action;
   if (action === 'csv') {
@@ -502,7 +520,8 @@ async function actualizarOnline() {
     if (panel.style.display !== 'none') mostrarOnlineLista();
   } catch(e) {}
 }
-function toggleOnlineList() {
+function toggleOnlineList(el) {
+  setActiveMenu(el);
   const panel = document.getElementById('onlinePanel');
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   if (panel.style.display !== 'none') mostrarOnlineLista();
@@ -554,10 +573,13 @@ async function cargar() {
   const cat = document.getElementById('filtroCategoria').value;
   const g = document.getElementById('filtroGravedad').value;
   const est = document.getElementById('filtroEstado').value;
+  const sideCat = window.filtroSidebarCategoria || '';
+  
   const filtrados = datos.filter(d =>
     (d.alumno.toLowerCase().includes(filtro) || d.grupo.toLowerCase().includes(filtro)) &&
     (!m || d.maestro === m) && (!cat || d.categoria === cat) &&
-    (!g || d.gravedad === g) && (est === '' || d.resuelta == est)
+    (!g || d.gravedad === g) && (est === '' || d.resuelta == est) &&
+    (!sideCat || d.categoria === sideCat)
   );
   document.getElementById('countBadge').textContent = filtrados.length;
   const empty = document.getElementById('emptyState');
@@ -667,7 +689,8 @@ async function addComentario() {
 }
 
 let dashboardVisible = false;
-function toggleDashboard() {
+function toggleDashboard(el) {
+  setActiveMenu(el);
   dashboardVisible = !dashboardVisible;
   document.getElementById('dashboard').style.display = dashboardVisible ? 'block' : 'none';
   if (dashboardVisible) actualizarDashboard();
@@ -914,7 +937,8 @@ async function eliminarCategoria(id, nombre) {
 }
 
 // Config modal
-async function mostrarConfig() {
+async function mostrarConfig(el) {
+  setActiveMenu(el);
   document.getElementById('configModal').style.display = 'flex';
   document.getElementById('backupStatus').textContent = '';
   // Cargar config backup
