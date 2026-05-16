@@ -258,10 +258,10 @@
     <h3>Exportar</h3>
     <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem;">Seleccioná el formato</p>
     <div style="display:flex;flex-direction:column;gap:.5rem;">
-      <button class="btn btn-primary btn-export" data-action="csv" style="width:100%;">CSV (Excel)</button>
-      <button class="btn btn-outline btn-export" data-action="pdf" style="width:100%;">📄 PDF profesional</button>
-      <button class="btn btn-outline btn-export" data-action="html" style="width:100%;">Reporte HTML</button>
-      <button class="btn btn-outline btn-close-export" style="width:100%;margin-top:.5rem;">Cancelar</button>
+      <button class="btn btn-primary" onclick="doExport('csv')" style="width:100%;">CSV (Excel)</button>
+      <button class="btn btn-outline" onclick="doExport('pdf')" style="width:100%;">📄 PDF profesional</button>
+      <button class="btn btn-outline" onclick="doExport('html')" style="width:100%;">Reporte HTML</button>
+      <button class="btn btn-outline" onclick="document.getElementById('exportMenu').style.display='none'" style="width:100%;margin-top:.5rem;">Cancelar</button>
     </div>
   </div>
 </div>
@@ -492,18 +492,14 @@ function filtrarBitacora(cat, el) {
 }
 
 function showExportMenu(el) { 
+  if (!authed) { showPinDialog(() => showExportMenu(el)); return; }
   setActiveMenu(el);
   document.getElementById('exportMenu').style.display = 'flex'; 
 }
-document.getElementById('exportMenu').addEventListener('click', function(e) {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) {
-    if (e.target.classList.contains('btn-close-export') || e.target === this) this.style.display = 'none';
-    return;
-  }
-  const action = btn.dataset.action;
+
+function doExport(action) {
   const token = localStorage.getItem('sessionToken');
-  
+  const menu = document.getElementById('exportMenu');
   if (action === 'csv') {
     fetch('/api/export/csv?token=' + encodeURIComponent(token))
       .then(r => r.text())
@@ -511,13 +507,12 @@ document.getElementById('exportMenu').addEventListener('click', function(e) {
         document.getElementById('csvContent').textContent = txt;
         document.getElementById('csvModal').style.display = 'flex';
       }).catch(() => alert('Error al exportar CSV (Verifica tu sesión)'));
-    this.style.display = 'none';
+    menu.style.display = 'none';
+  } else {
+    window.open('/api/export/html?token=' + encodeURIComponent(token), '_blank');
+    menu.style.display = 'none';
   }
-  else if (action === 'html' || action === 'pdf') { 
-    window.location.href = '/api/export/html?token=' + encodeURIComponent(token); 
-    this.style.display = 'none';
-  }
-});
+}
 document.getElementById('csvModal').addEventListener('click', function(e) {
   if (e.target.classList.contains('btn-csv-close') || e.target === this)
     this.style.display = 'none';
