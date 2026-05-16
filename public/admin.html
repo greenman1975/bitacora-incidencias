@@ -509,7 +509,7 @@ function doExport(action) {
       }).catch(() => alert('Error al exportar CSV (Verifica tu sesión)'));
     menu.style.display = 'none';
   } else {
-    window.open('/api/export/html?token=' + encodeURIComponent(token), '_blank');
+    window.location.href = '/api/export/html?token=' + encodeURIComponent(token);
     menu.style.display = 'none';
   }
 }
