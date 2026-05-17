@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
+<div id="toastContainer" style="position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;max-width:360px;"></div>
 <div class="outside-title">INCIDENTLOG · SERVIDOR WEB — BITÁCORA DE INCIDENCIAS</div>
 <div class="app-layout">
   <!-- SIDEBAR -->
@@ -41,13 +42,15 @@
       </a>
       <a href="#" class="menu-item" onclick="filtrarBitacora('Usuarios', this)"><span>Usuarios</span></a>
       <a href="#" class="menu-item" onclick="mostrarConfig(this)"><span>Configuración</span></a>
+      <a href="#" class="menu-item" onclick="mostrarActividad(this)"><span>Actividad</span></a>
+      <a href="#" class="menu-item" onclick="mostrarQR(this)"><span>Código QR</span></a>
     </div>
     
     <div class="sidebar-footer">
-      <div class="user-avatar" id="authBtn" onclick="showPinDialog()">CA</div>
+      <div class="user-avatar" id="authBtn" onclick="showPinDialog()">🔐</div>
       <div class="user-info">
-        <div class="user-name">Carlos Aranda</div>
-        <div class="user-role" onclick="logout()">Administrador</div>
+        <div class="user-name" id="userName">No autenticado</div>
+        <div class="user-role" onclick="if(authed)logout();else showPinDialog();" style="cursor:pointer;font-size:.7rem;color:var(--accent);" id="userRole">Ingresar PIN</div>
       </div>
     </div>
   </aside>
@@ -58,6 +61,11 @@
       <div class="header-titles">
         <h2>Bitácora de incidencias</h2>
         <p>Registros del 16 may 2026 · Servidores de producción</p>
+        <p style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">
+          <span id="statusDot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#34C759;margin-right:4px;"></span>
+          <span id="statusText">En línea</span>
+          <span style="margin-left:8px;" id="serverIP"></span>
+        </p>
       </div>
       <div class="header-actions">
         <div style="display:flex; gap:8px; align-items:center;">
@@ -106,8 +114,11 @@
         <option value="0">Pendiente</option>
         <option value="1">Resuelta</option>
       </select>
-      <select class="filter-select">
-        <option value="">Hoy</option>
+      <select class="filter-select" id="filtroMaestro">
+        <option value="">Docente</option>
+      </select>
+      <select class="filter-select" id="filtroCategoria">
+        <option value="">Categoría</option>
       </select>
     </div>
 
@@ -128,6 +139,53 @@
         <tbody id="lista">
         </tbody>
       </table>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" style="display:none;">
+      <div class="top-header" style="border-bottom:none;padding-bottom:0;">
+        <div class="header-titles">
+          <h2>Tablero</h2>
+          <p>Estadísticas generales de la bitácora</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-outline" onclick="toggleDashboard(document.querySelector('.menu-item'))" style="font-size:.75rem;">Cerrar ✕</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;padding:1.5rem 2rem;">
+        <div class="stat-widget">
+          <div class="stat-w-title">Total incidencias</div>
+          <div class="stat-w-value" style="color:var(--accent);" id="stat-total">0</div>
+        </div>
+        <div class="stat-widget">
+          <div class="stat-w-title">Pendientes</div>
+          <div class="stat-w-value" style="color:var(--danger);" id="stat-pendientes">0</div>
+        </div>
+        <div class="stat-widget">
+          <div class="stat-w-title">Resueltas</div>
+          <div class="stat-w-value" style="color:var(--success);" id="stat-resueltas">0</div>
+        </div>
+      </div>
+      <div class="dashboard-grid" style="padding:0 2rem 2rem;">
+        <div class="chart-card"><h4>Por Gravedad</h4><canvas id="chartGravedad" height="180"></canvas></div>
+        <div class="chart-card"><h4>Por Categoría</h4><canvas id="chartCategoria" height="180"></canvas></div>
+        <div class="chart-card"><h4>Por Grupo (top 5)</h4><canvas id="chartGrupo" height="180"></canvas></div>
+        <div class="chart-card"><h4>Tendencia (30 días)</h4><canvas id="chartTimeline" height="180"></canvas></div>
+      </div>
+      <div id="weeklyRow" style="display:none;gap:.5rem;padding:0 2rem 2rem;">
+        <div class="stat-widget" style="flex:1;">
+          <div class="stat-w-title">Esta semana</div>
+          <div class="stat-w-value" style="color:var(--accent);" id="weekThis">0</div>
+        </div>
+        <div class="stat-widget" style="flex:1;">
+          <div class="stat-w-title">Semana pasada</div>
+          <div class="stat-w-value" style="color:var(--text-muted);" id="weekLast">0</div>
+        </div>
+        <div class="stat-widget" style="flex:1;">
+          <div class="stat-w-title">Tendencia</div>
+          <div class="stat-w-value" id="weekTrend" style="font-size:1.2rem;">—</div>
+        </div>
+      </div>
     </div>
   </main>
 </div>
@@ -330,8 +388,10 @@ function logout() {
 }
 
 function mostrarIP() {
+  const el = document.getElementById('serverIP');
+  if (!el) return;
   const ip = localStorage.getItem('serverIP') || '192.168.11.50';
-  document.getElementById('serverIP').textContent = ip;
+  el.textContent = ip;
 }
 function editarIP() {
   const ip = prompt('Dirección IP del servidor:', localStorage.getItem('serverIP') || '192.168.11.50');
@@ -406,6 +466,7 @@ document.addEventListener('keydown', (e) => {
 function setOnline(online) {
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusText');
+  if (!dot || !txt) return;
   if (online) { dot.style.background = '#34C759'; txt.textContent = 'En línea'; }
   else { dot.style.background = '#FF453A'; txt.textContent = 'Desconectado'; }
 }
@@ -421,7 +482,9 @@ async function authPin() {
     authed = true; savedPin = pin; 
     if (data.token) localStorage.setItem('sessionToken', data.token);
     closePinDialog(); 
-    document.getElementById('authBtn').textContent = 'Subdirector'; 
+    document.getElementById('authBtn').textContent = '👤'; 
+    document.getElementById('userName').textContent = 'Subdirector';
+    document.getElementById('userRole').textContent = 'Cerrar sesión';
     cargar(); 
     if (pendingAuthAction) { const act = pendingAuthAction; pendingAuthAction = null; act(); }
   }
@@ -480,10 +543,13 @@ function setActiveMenu(el) {
 
 function filtrarBitacora(cat, el) {
   setActiveMenu(el);
-  window.filtroSidebarCategoria = cat === 'todos' ? '' : cat;
-  // If we are filtering by a category that doesn't exist, maybe we should alert?
-  // No, just filter and let them see empty list.
+  window.filtroSidebar = cat;
   if (document.getElementById('dashboard')) document.getElementById('dashboard').style.display = 'none';
+  // reset select filters
+  ['filtroGravedad','filtroEstado','filtroMaestro','filtroCategoria'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.value = '';
+  });
   cargar();
 }
 
@@ -586,19 +652,30 @@ async function cargar() {
   const cat = document.getElementById('filtroCategoria').value;
   const g = document.getElementById('filtroGravedad').value;
   const est = document.getElementById('filtroEstado').value;
-  const sideCat = window.filtroSidebarCategoria || '';
+  const side = window.filtroSidebar || 'todos';
   
-  const filtrados = datos.filter(d =>
-    (d.alumno.toLowerCase().includes(filtro) || d.grupo.toLowerCase().includes(filtro)) &&
-    (!m || d.maestro === m) && (!cat || d.categoria === cat) &&
-    (!g || d.gravedad === g) && (est === '' || d.resuelta == est) &&
-    (!sideCat || d.categoria === sideCat)
-  );
+  const filtrados = datos.filter(d => {
+    if (!d.alumno.toLowerCase().includes(filtro) && !d.grupo.toLowerCase().includes(filtro)) return false;
+    if (m && d.maestro !== m) return false;
+    if (cat && d.categoria !== cat) return false;
+    if (g && d.gravedad !== g) return false;
+    if (est !== '' && d.resuelta != est) return false;
+    // sidebar filters
+    if (side === 'Servidores' && d.resuelta != 0) return false;
+    if (side === 'Red' && d.gravedad !== 'Alta') return false;
+    if (side === 'Bases de datos' && d.categoria !== 'Conducta') return false;
+    if (side === 'Usuarios' && d.categoria !== 'Académico') return false;
+    return true;
+  });
   document.getElementById('countBadge').textContent = filtrados.length;
-  const empty = document.getElementById('emptyState');
   const list = document.getElementById('lista');
-  if (filtrados.length === 0) { empty.style.display = 'block'; list.innerHTML = ''; return; }
-  empty.style.display = 'none';
+  if (filtrados.length === 0) {
+    list.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.85rem;">Sin resultados para este filtro</td></tr>';
+    document.getElementById('w-total') && (document.getElementById('w-total').textContent = datos.length);
+    document.getElementById('w-pendientes') && (document.getElementById('w-pendientes').textContent = datos.filter(x=>!x.resuelta).length);
+    document.getElementById('w-resueltas') && (document.getElementById('w-resueltas').textContent = datos.filter(x=>x.resuelta).length);
+    return;
+  }
   
   // Update widgets
   if(document.getElementById('w-total')) document.getElementById('w-total').textContent = datos.length;
@@ -832,18 +909,18 @@ document.getElementById('lista').addEventListener('click', function(e) {
   const edit = e.target.closest('.btn-edit');
   if (edit) {
     const id = parseInt(edit.dataset.id);
-    const card = edit.closest('.card');
-    if (card) {
+    const row = edit.closest('tr');
+    if (row) {
       editId = id;
-      document.getElementById('editAlumno').value = card.dataset.alumno;
-      document.getElementById('editGrupo').value = card.dataset.grupo;
-      document.getElementById('editDesc').value = card.dataset.desc;
-      document.getElementById('editGravedad').value = card.dataset.gravedad;
-      document.getElementById('editCategoria').value = card.dataset.categoria;
-      document.getElementById('editUbicacion').value = card.dataset.ubicacion || '';
-      document.getElementById('editPersonas').value = card.dataset.personas || '';
-      document.getElementById('editAcciones').value = card.dataset.acciones || '';
-      document.getElementById('editSeguimiento').value = card.dataset.seguimiento || '';
+      document.getElementById('editAlumno').value = row.dataset.alumno;
+      document.getElementById('editGrupo').value = row.dataset.grupo;
+      document.getElementById('editDesc').value = row.dataset.desc;
+      document.getElementById('editGravedad').value = row.dataset.gravedad;
+      document.getElementById('editCategoria').value = row.dataset.categoria;
+      document.getElementById('editUbicacion').value = row.dataset.ubicacion || '';
+      document.getElementById('editPersonas').value = row.dataset.personas || '';
+      document.getElementById('editAcciones').value = row.dataset.acciones || '';
+      document.getElementById('editSeguimiento').value = row.dataset.seguimiento || '';
       document.getElementById('editDialog').style.display = 'flex';
     }
   }
@@ -854,6 +931,9 @@ if (token) {
   fetch('/api/incidencias').then(r => {
     if (r.ok) {
       authed = true;
+      document.getElementById('authBtn').textContent = '👤';
+      document.getElementById('userName').textContent = 'Subdirector';
+      document.getElementById('userRole').textContent = 'Cerrar sesión';
       cargar(); cargarMaestros(); cargarCategoriasSelects();
     } else {
       localStorage.removeItem('sessionToken');
@@ -872,7 +952,8 @@ if (token) {
 }
 
 // QR
-async function mostrarQR() {
+async function mostrarQR(el) {
+  if (el) setActiveMenu(el);
   document.getElementById('qrModal').style.display = 'flex';
   document.getElementById('qrContainer').innerHTML = 'Cargando...';
   document.getElementById('qrUrl').textContent = '';
@@ -886,7 +967,8 @@ async function mostrarQR() {
   }
 }
 
-async function mostrarActividad() {
+async function mostrarActividad(el) {
+  if (el) setActiveMenu(el);
   document.getElementById('actividadModal').style.display = 'flex';
   document.getElementById('actividadList').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">Cargando...</div>';
   try {

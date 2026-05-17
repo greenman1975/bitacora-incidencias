@@ -16,6 +16,10 @@
   --radius-sm: 6px;
   --radius: 12px;
   --shadow: 0 4px 12px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.08);
+  --bg-primary: #e6eaf0;
+  --bg-card: #ffffff;
+  --border-light: #f1f5f9;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
